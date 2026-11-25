@@ -162,6 +162,9 @@ got something from. That is the whole idea.
   1. Later versions keep one list with the same numbers as here.
 - **A link reads as an ordinary link.** The app decides how links look; the
   plugin cannot draw a chip in the middle of a sentence.
+- **No links, only numbers like [1]?** Run `/reload-plugins` in the session.
+  The answer is drawn again with its links. This has happened in sessions
+  started right after an install or an update.
 
 ## Developing
 
