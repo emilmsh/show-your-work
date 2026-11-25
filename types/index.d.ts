@@ -32,6 +32,9 @@ export type View = {
   group: 'none' | 'file' | 'kind'
 }
 
+/** How eagerly Claude cites: by itself, only when asked, or not at all */
+export type Mode = 'always' | 'asked' | 'off'
+
 declare module 'claude-code' {
   interface PluginState {
     'show-your-work': {
@@ -40,6 +43,9 @@ declare module 'claude-code' {
        *  hex characters, made at the first PDF citation; '' until then */
       reader: Shaped<string>
       view: Shaped<View>
+      /** The documents this turn has read and not cited: file names, in the
+       *  order read. Emptied when a turn starts and when a source is cited. */
+      uncited: Shaped<string[]>
     }
   }
 }

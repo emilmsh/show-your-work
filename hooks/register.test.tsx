@@ -334,3 +334,92 @@ test('on a system that is not Windows the plugin offers nothing and starts nothi
   expect(await cite($, { source: REPORT, quote: 'words' })).toMatch(/^DENIED: Show your work runs on Windows only for now/)
   expect(runs.length).toBe(0)
 })
+
+const BAND = {
+  plugin: 'show-your-work',
+  component: 'AbovePrompt',
+  props: {
+    hasSurvey: false,
+    isCollapsed: false,
+    isWorking: false,
+    maxRows: 4,
+    bodyColumns: 80,
+    scroll: { offset: 0, bodyRows: 4 },
+    view: {},
+  },
+} as const
+
+/** The reader's choice of when Claude cites, as the store across sessions holds it */
+function chosen(on: On, mode: () => string | undefined, submitted: string[] = []): void {
+  on('store.get', () => ({ value: mode() }))
+  on('store.set', () => ({ value: undefined }))
+  on('prompt.compose', () => ({ sections: [{ id: 'core', text: 'You are Claude.', scope: 'shared' as const }] }))
+  on('prompt.submit', (_, e) => {
+    submitted.push(e.text)
+
+    return { text: e.text, context: [] } as never
+  })
+  on('tool.call', () => ({ result: 'ok' }))
+}
+
+test('citing is the default: a standing instruction, unless the reader turned it down', async ($, on) => {
+  let mode: string | undefined
+  machine(on)
+  chosen(on, () => mode)
+
+  const rule = async (): Promise<string | undefined> =>
+    (
+      await $.prompt.compose({
+        model: 'test',
+        promptModel: 'test',
+        surfaces: ['desktop'],
+        tools: [],
+        outputStyle: null,
+        traits: [],
+      })
+    ).sections.find(one => one.id === 'show-your-work:cite')?.text
+
+  // Nothing chosen yet: on
+  expect(await rule()).toMatch(/back the claims that matter with the show_source tool/)
+  mode = 'asked'
+  expect(await rule()).toBe(undefined)
+  mode = 'off'
+  expect(await rule()).toBe(undefined)
+  // Off, the tool itself refuses, and starts nothing
+  expect(await cite($, { source: REPORT, quote: 'words' })).toMatch(/^DENIED: The user has turned Show your work off/)
+})
+
+test('a turn that read documents and cited none is offered its sources in one press', async ($, on) => {
+  const asked: string[] = []
+  machine(on)
+  chosen(on, () => 'asked', asked)
+
+  const offer = async (): Promise<string | undefined> => {
+    const ui = await $.ui.mount({ ...BAND, surface: 'desktop' })
+    const text = (await ui.find({ type: 'Text', text: /report\.docx/ }))?.text
+
+    await ui.unmount()
+
+    return text
+  }
+
+  // Code and notes are read all day and offered nothing
+  await $.tool.call({ tool: 'Read', file_path: 'C:\\work\\main.ts' } as never)
+  expect(await offer()).toBe(undefined)
+
+  await $.tool.call({ tool: 'Read', file_path: REPORT } as never)
+  await $.tool.call({ tool: 'Bash', command: 'python read.py "C:\\work\\model.xlsx"' } as never)
+  expect(await offer()).toMatch(/report\.docx, model\.xlsx/)
+
+  // One press asks for the sources, as the reader's own words
+  const ui = await $.ui.mount({ ...BAND, surface: 'desktop' })
+  await ui.press({ key: 'cite' })
+  await ui.unmount()
+  expect(asked.at(-1)).toMatch(/cite them with show_source/)
+  expect(await offer()).toBe(undefined)
+
+  // And a turn that cites is offered nothing
+  await $.tool.call({ tool: 'Read', file_path: REPORT } as never)
+  await cite($, { source: REPORT, quote: 'words' })
+  expect(await offer()).toBe(undefined)
+})

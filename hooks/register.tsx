@@ -28,7 +28,7 @@
 import { atom, read, update } from 'claude-code'
 import type { EngineInterface, Register } from 'claude-code'
 
-import type { Kind, Source, Status, View } from '../types'
+import type { Kind, Mode, Source, Status, View } from '../types'
 
 // ---------- State ----------
 //
@@ -42,6 +42,8 @@ const view = atom(
   { sort: 'cited', filter: 'all', group: 'none' },
   { shape: 'view-2' },
 )
+
+const uncited = atom({ plugin: 'show-your-work', key: 'uncited' } as const, [], { shape: 'uncited-1' })
 
 /** The most kept: a session that cites more than this has long since scrolled
  *  the first ones out of reach */
@@ -103,6 +105,11 @@ type Words = {
   command: string
   opened: string
   notHere: string
+  mode: string
+  modes: Record<Mode, string>
+  nextSession: string
+  uncited: (names: string) => string
+  cite: string
 }
 
 const EN: Words = {
@@ -138,6 +145,11 @@ const EN: Words = {
   command: 'Open the pane with the sources Claude has cited in this session',
   opened: 'The Sources pane is open.',
   notHere: 'The Sources pane cannot be shown here.',
+  mode: 'Cite',
+  modes: { always: 'By itself', asked: 'When I ask', off: 'Off' },
+  nextSession: 'Applies fully from your next session.',
+  uncited: names => `Claude read ${names} and showed no sources.`,
+  cite: 'Show the sources',
 }
 
 const NB: Words = {
@@ -173,6 +185,11 @@ const NB: Words = {
   command: 'Åpne panelet med kildene Claude har vist til i denne sesjonen',
   opened: 'Kildepanelet er åpnet.',
   notHere: 'Kildepanelet kan ikke vises her.',
+  mode: 'Siter',
+  modes: { always: 'Av seg selv', asked: 'Når jeg ber om det', off: 'Av' },
+  nextSession: 'Gjelder fullt ut fra neste sesjon.',
+  uncited: names => `Claude leste ${names} og viste ingen kilder.`,
+  cite: 'Vis kildene',
 }
 
 /** The language the machine is set to, which is as close as a plugin gets to
@@ -567,6 +584,44 @@ async function isWindows($: EngineInterface): Promise<boolean> {
   }
 }
 
+// ---------- When Claude cites ----------
+//
+// A tool the model MAY call is not a habit: left to itself it writes «the
+// report says …» and cites nothing (Emil, 2026-11-25). Three things make
+// citing the default, and the reader's to turn down:
+//   - a standing instruction in the system prompt, while the mode is 'always';
+//   - an offer under the prompt when a turn read documents and cited none,
+//     which asks for the sources in one press — it does not depend on the
+//     model having remembered anything;
+//   - the mode itself, kept across sessions: by itself, when asked, or off.
+
+/** What the model is told at the start of every session while citing is on.
+ *  It says WHEN (a claim about a document the reader can open), WHAT (the
+ *  claims that matter, not every sentence — a look-up takes seconds) and what
+ *  a miss means. */
+const RULE = [
+  'The user has installed «Show your work» so that they can check what you say against the source in one press.',
+  'When you tell the user what a document says — a Word, PowerPoint or Excel file, a PDF, a note, or a web page they can open — back the claims that matter with the show_source tool: figures, findings, dates, and anything you quote.',
+  'Call it once per claim, several calls in parallel, with the source’s own words verbatim, and write the number it answers with, like [3], right after the claim. The user sees a link there that opens the source at the words.',
+  'Do not cite every sentence, and do not cite code you are editing or a file you only skimmed for context.',
+  'If show_source answers NOT FOUND, the words are not in the source: correct the claim or say it is unverified. Never write a page, slide or cell from memory in place of calling the tool.',
+].join(' ')
+
+/** The reader's choice, kept across sessions; 'always' until they choose */
+async function modeOf($: EngineInterface): Promise<Mode> {
+  try {
+    const kept = await $.store.get('mode')
+
+    return kept === 'asked' || kept === 'off' ? kept : 'always'
+  } catch {
+    return 'always'
+  }
+}
+
+/** The kinds a turn is offered sources for: documents, never the code and
+ *  notes a coding session reads all day */
+const DOCUMENT = /[^\s"'<>|*?]+\.(docx?|pptx?|xlsx?|pdf)\b/gi
+
 const ELSEWHERE = 'Show your work runs on Windows only for now, so it cannot check or open a source on this machine.'
 
 export const register: Register = on => {
@@ -600,6 +655,69 @@ export const register: Register = on => {
     return next(e)
   })
 
+  on('prompt.compose', async ($, e, next) => {
+    const composed = await next(e)
+
+    if ((await modeOf($)) !== 'always' || !(await isWindows($))) {
+      return composed
+    }
+
+    return {
+      ...composed,
+      sections: [...composed.sections, { id: 'show-your-work:cite', text: RULE, scope: 'session' as const }],
+    }
+  })
+
+  // A new turn starts clean: what the last one read is no longer on offer
+  on('prompt.submit', async ($, e, next) => {
+    await update($, uncited, () => [])
+
+    return next(e)
+  })
+
+  // Every tool call is looked at for the documents it names — a Read, a
+  // script that opens one — and nothing else of it is kept
+  on('tool.call', async ($, e, next) => {
+    if (e.tool !== 'mcp__show-your-work__show_source') {
+      const named = [...JSON.stringify(e).matchAll(DOCUMENT)].map(match => nameOf(match[0].replace(/\\\\/g, '/')))
+
+      if (named.length > 0) {
+        await update($, uncited, list => [...new Set([...list, ...named])].slice(-20))
+      }
+    }
+
+    return next(e)
+  })
+
+  on('ui.render', { component: 'AbovePrompt' }, async ($, e, next) => {
+    const read_ = await read($, uncited)
+
+    if (e.props.hasSurvey || read_.length === 0 || (await modeOf($)) === 'off' || !(await isWindows($))) {
+      return next(e)
+    }
+
+    const { Box, Button, Text } = $.ui.resolve(e)
+    const the = words()
+    const names = read_.length > 3 ? `${read_.slice(0, 3).join(', ')} …` : read_.join(', ')
+
+    return (
+      <Box flexDirection="row" columnGap={1}>
+        <Text dimColor>{the.uncited(names)}</Text>
+        <Button
+          key="cite"
+          label={the.cite}
+          onPress={async () => {
+            await update($, uncited, () => [])
+            await $.prompt.submit({
+              text: 'Show me where each claim in your last answer is said: cite them with show_source, and tell me if any is not in the source.',
+              asUser: true,
+            })
+          }}
+        />
+      </Box>
+    )
+  })
+
   // The pane opens by itself at the first citation; this brings it back
   // after it has been closed, and opens it before there is any
   on('command.run', { command: 'sources' }, async $ => {
@@ -618,6 +736,10 @@ export const register: Register = on => {
     const path = typeof input.source === 'string' ? input.source.trim() : ''
     const kind = kindOf(path)
     const quote = typeof input.quote === 'string' ? input.quote.trim() : ''
+
+    if ((await modeOf($)) === 'off') {
+      return { deny: 'The user has turned Show your work off. Cite in plain text, and say that the links are off.' }
+    }
 
     if (kind === undefined || quote === '') {
       return {
@@ -657,6 +779,9 @@ export const register: Register = on => {
 
     const located = await locate(made, input.show === true, $)
 
+    // Cited: the turn is no longer one that read documents and showed nothing
+    await update($, uncited, () => [])
+
     made = { ...made, page: located.page || asked.page, status: located.status }
     await update($, sources, list => list.map(one => (one.n === made.n ? made : one)))
     // Nowhere to draw a pane (a phone, a run with no window) is no failure
@@ -673,13 +798,37 @@ export const register: Register = on => {
     const shown = arranged(list, how)
     const kinds = KINDS.filter(kind => list.some(one => one.kind === kind))
     const lost = list.filter(one => one.status === 'missing').length
+    const mode = await modeOf($)
+    const modes = (
+      <Select
+        key="mode"
+        label={the.mode}
+        value={mode}
+        options={(['always', 'asked', 'off'] as const).map(value => ({ value, label: the.modes[value] }))}
+        onSelect={value => {
+          if (value === 'always' || value === 'asked' || value === 'off') {
+            void $.store.set('mode', value).then(() => {
+              $.ui.toast(the.nextSession)
+              $.ui.invalidate('ui.render')
+            })
+          }
+        }}
+      />
+    )
 
     if (list.length === 0) {
-      return <Text dimColor>{the.none}</Text>
+      return (
+        <Box flexDirection="column">
+          {modes}
+          <Text> </Text>
+          <Text dimColor>{the.none}</Text>
+        </Box>
+      )
     }
 
     return (
       <Box flexDirection="column">
+        {modes}
         <Box flexDirection="row" flexWrap="wrap" columnGap={2}>
           <Select
             key="sort"
