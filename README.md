@@ -63,7 +63,7 @@ got something from. That is the whole idea.
 
 ## Install
 
-The repository is private for now. Once it is public:
+In a Claude Code terminal session:
 
 ```
 /plugin install show-your-work --marketplace emilmsh/show-your-work
