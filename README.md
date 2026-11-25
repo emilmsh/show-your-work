@@ -1,10 +1,16 @@
-<img src="assets/icon.svg" alt="Show your work icon" width="96" align="right">
+<p align="center">
+  <img src="assets/icon.svg" alt="Show your work" width="112" height="112">
+</p>
 
-# Show your work
+<h1 align="center">Show your work</h1>
 
+<p align="center"><strong>Claude's sources, one press away.</strong></p>
+
+<p align="center">
 A plugin for Claude Code that makes Claude show exactly where each claim comes
 from. Every source Claude cites becomes a link in its answer. Press it and the
 file opens in its own program, at the cited words.
+</p>
 
 **Windows only, for now.** It drives Word, Excel and PowerPoint through their
 own automation, which this version does only on Windows.
