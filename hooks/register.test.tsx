@@ -37,6 +37,9 @@ type Run = { argv: readonly string[]; request: Record<string, unknown>; stdin: s
 /** The tools the plugin has registered, by name, in every test of this file's run */
 const registered: string[] = []
 
+/** …and what each told the model about itself */
+const described: string[] = []
+
 /** A program that ran and wrote this */
 const ran = (stdout: string) => ({
   value: { exitCode: 0, stdout, stderr: '', isStdoutTruncated: false, isStderrTruncated: false },
@@ -57,6 +60,7 @@ function machine(
   on('session.start', (_, e) => ({ cwd: e.cwd }))
   on('tool.register', (_, e) => {
     registered.push(e.name)
+    described.push(e.description)
 
     return { value: { tool: TOOL } }
   })
@@ -362,30 +366,26 @@ function chosen(on: On, mode: () => string | undefined, submitted: string[] = []
   on('tool.call', () => ({ result: 'ok' }))
 }
 
-test('citing is the default: a standing instruction, unless the reader turned it down', async ($, on) => {
+test('citing is the default: the tool says when to call it, unless the reader turned it down', async ($, on) => {
   let mode: string | undefined
   machine(on)
   chosen(on, () => mode)
 
-  const rule = async (): Promise<string | undefined> =>
-    (
-      await $.prompt.compose({
-        model: 'test',
-        promptModel: 'test',
-        surfaces: ['desktop'],
-        tools: [],
-        outputStyle: null,
-        traits: [],
-      })
-    ).sections.find(one => one.id === 'show-your-work:cite')?.text
+  const start = async (): Promise<string | undefined> => {
+    registered.length = 0
+    described.length = 0
+    await $.session.start({ cwd: '/', surface: 'desktop', isInteractive: true })
 
-  // Nothing chosen yet: on
-  expect(await rule()).toMatch(/back the claims that matter with the show_source tool/)
+    return described[0]
+  }
+
+  // Nothing chosen yet: Claude cites by itself
+  expect(await start()).toMatch(/^USE THIS WHENEVER you tell the user what a document says/)
   mode = 'asked'
-  expect(await rule()).toBe(undefined)
+  expect(await start()).toMatch(/^Use this when the user asks where something is said/)
+  // Off: no tool at all, and one called all the same refuses and starts nothing
   mode = 'off'
-  expect(await rule()).toBe(undefined)
-  // Off, the tool itself refuses, and starts nothing
+  expect(await start()).toBe(undefined)
   expect(await cite($, { source: REPORT, quote: 'words' })).toMatch(/^DENIED: The user has turned Show your work off/)
 })
 

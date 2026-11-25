@@ -589,23 +589,25 @@ async function isWindows($: EngineInterface): Promise<boolean> {
 // A tool the model MAY call is not a habit: left to itself it writes «the
 // report says …» and cites nothing (Emil, 2026-11-25). Three things make
 // citing the default, and the reader's to turn down:
-//   - a standing instruction in the system prompt, while the mode is 'always';
+//   - the tool's own description says WHEN to call it, and how eagerly: that
+//     is the one text of a plugin's the model reads at every turn. (A section
+//     in the system prompt would be the obvious place and is not a plugin's
+//     to add: the engine's own security plugin passes a plugin's
+//     `prompt.compose` hook over. Measured 2026-11-25, and left alone.)
 //   - an offer under the prompt when a turn read documents and cited none,
 //     which asks for the sources in one press — it does not depend on the
 //     model having remembered anything;
 //   - the mode itself, kept across sessions: by itself, when asked, or off.
 
-/** What the model is told at the start of every session while citing is on.
- *  It says WHEN (a claim about a document the reader can open), WHAT (the
- *  claims that matter, not every sentence — a look-up takes seconds) and what
- *  a miss means. */
-const RULE = [
-  'The user has installed «Show your work» so that they can check what you say against the source in one press.',
-  'When you tell the user what a document says — a Word, PowerPoint or Excel file, a PDF, a note, or a web page they can open — back the claims that matter with the show_source tool: figures, findings, dates, and anything you quote.',
-  'Call it once per claim, several calls in parallel, with the source’s own words verbatim, and write the number it answers with, like [3], right after the claim. The user sees a link there that opens the source at the words.',
-  'Do not cite every sentence, and do not cite code you are editing or a file you only skimmed for context.',
-  'If show_source answers NOT FOUND, the words are not in the source: correct the claim or say it is unverified. Never write a page, slide or cell from memory in place of calling the tool.',
-].join(' ')
+/** How the description opens, by the reader's mode: WHEN to cite. It says
+ *  what (the claims that matter, not every sentence — a look-up takes
+ *  seconds) and what is not a source (code being edited). */
+const WHEN: Record<Exclude<Mode, 'off'>, string> = {
+  always:
+    'USE THIS WHENEVER you tell the user what a document says. The user installed «Show your work» to check your claims against the source in one press, so back the claims that matter — figures, findings, dates, anything you quote — from a Word, PowerPoint or Excel file, a PDF, a note or a web page with one call each, several in parallel, before you answer. Do not cite every sentence, and do not cite code you are editing or a file you only skimmed for context. ',
+  asked:
+    'Use this when the user asks where something is said, asks for sources, or asks you to show your work — not unasked. ',
+}
 
 /** The reader's choice, kept across sessions; 'always' until they choose */
 async function modeOf($: EngineInterface): Promise<Mode> {
@@ -626,14 +628,17 @@ const ELSEWHERE = 'Show your work runs on Windows only for now, so it cannot che
 
 export const register: Register = on => {
   on('session.start', async ($, e, next) => {
-    if (!(await isWindows($))) {
+    const mode = await modeOf($)
+
+    // Off, or not on Windows: no tool for the model to reach for
+    if (mode === 'off' || !(await isWindows($))) {
       return next(e)
     }
 
     await $.tool.register({
       name: 'show_source',
       isDeferred: false,
-      description: DESCRIPTION,
+      description: `${WHEN[mode]}${DESCRIPTION}`,
       inputSchema: {
         type: 'object',
         properties: {
@@ -653,19 +658,6 @@ export const register: Register = on => {
     await $.command.register({ name: 'sources', description: words().command })
 
     return next(e)
-  })
-
-  on('prompt.compose', async ($, e, next) => {
-    const composed = await next(e)
-
-    if ((await modeOf($)) !== 'always' || !(await isWindows($))) {
-      return composed
-    }
-
-    return {
-      ...composed,
-      sections: [...composed.sections, { id: 'show-your-work:cite', text: RULE, scope: 'session' as const }],
-    }
   })
 
   // A new turn starts clean: what the last one read is no longer on offer
