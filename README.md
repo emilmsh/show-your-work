@@ -52,6 +52,29 @@ sure can we be? Show me where each thing is said.
 
 Then press the links in the answer.
 
+## When Claude cites
+
+Out of the box Claude cites by itself: whenever it tells you what a document
+says, it backs the claims that matter — figures, findings, dates, quotes —
+and leaves the rest. It does not cite code it is editing.
+
+You decide how eager it is. Open the Sources pane (`/sources`) and set
+**Cite**:
+
+- **By itself**: the default.
+- **When I ask**: only when you ask where something is said, or for sources.
+- **Off**: the plugin offers Claude nothing. Links already in the session
+  keep working.
+
+The choice is remembered, and applies fully from your next session.
+
+If a turn read a Word, PowerPoint, Excel or PDF file and Claude showed no
+sources, a line appears above the prompt with a **Show the sources** button.
+One press asks Claude to cite the claims in its last answer.
+
+Two habits that help: name the files you want the answer from, and ask "show
+me where it says that" when a claim matters to you.
+
 ## What it looks like
 
 ```
