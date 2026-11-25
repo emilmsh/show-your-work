@@ -34,6 +34,11 @@ type On = Parameters<Extract<Parameters<typeof test>[1], (...args: never[]) => u
 
 type Run = { argv: readonly string[]; request: Record<string, unknown>; stdin: string }
 
+/** A program that ran and wrote this */
+const ran = (stdout: string) => ({
+  value: { exitCode: 0, stdout, stderr: '', isStdoutTruncated: false, isStderrTruncated: false },
+})
+
 /** The machine beneath the plugin. `script` answers a lookup by its request;
  *  PDF Scholar's server answers every passage as found on the page cited. */
 function machine(
@@ -65,16 +70,14 @@ function machine(
         .find(one => one.id === 2)
       const text = `[${call?.params?.arguments?.number ?? 1}] Found word for word on page ${call?.params?.arguments?.page ?? 1}. It is in the user’s list of references in PDF Scholar.`
 
-      return {
-        value: {
-          exitCode: 0,
-          stdout: `\r\n${JSON.stringify({ jsonrpc: '2.0', id: 1, result: {} })}\n${JSON.stringify({ jsonrpc: '2.0', id: 2, result: { content: [{ type: 'text', text }] } })}\n`,
-          stderr: '',
-        },
-      }
+      // Electron writes a line break before any code runs: the answer is
+      // found by its id, not by its place
+      return ran(
+        `\r\n${JSON.stringify({ jsonrpc: '2.0', id: 1, result: {} })}\n${JSON.stringify({ jsonrpc: '2.0', id: 2, result: { content: [{ type: 'text', text }] } })}\n`,
+      )
     }
 
-    return { value: { exitCode: 0, stdout: `${JSON.stringify(script(request))}\n`, stderr: '' } }
+    return ran(`${JSON.stringify(script(request))}\n`)
   })
 
   return runs
@@ -244,6 +247,24 @@ test('the pane lists every source, and sorts and filters them', async ($, on) =>
   await ui.select({ key: 'sort', value: 'file' })
   // appendix.docx before report.docx
   expect((await ui.findAll({ type: 'Button' })).map(button => button.key)).toEqual(['source-3', 'source-1'])
+
+  // Grouped: a heading per file with its count, files by name, and a row
+  // under its file's heading no longer repeats the file's name
+  await ui.select({ key: 'filter', value: 'all' })
+  await ui.select({ key: 'group', value: 'file' })
+  expect((await ui.findAll({ type: 'Text', text: /\(\d\)$/ })).map(heading => heading.text)).toEqual([
+    'appendix.docx (1)',
+    'model.xlsx (1)',
+    'report.docx (1)',
+  ])
+  expect((await ui.findAll({ type: 'Button' })).map(button => button.key)).toEqual(['source-3', 'source-2', 'source-1'])
+  expect(await ui.find({ type: 'Text', text: /^report\.docx$/ })).toBe(undefined)
+
+  await ui.select({ key: 'group', value: 'kind' })
+  expect((await ui.findAll({ type: 'Text', text: /\(\d\)$/ })).map(heading => heading.text)).toEqual([
+    'Word (2)',
+    'Excel (1)',
+  ])
 
   await ui.press({ key: 'source-3' })
   expect(runs.at(-1)?.request).toEqual({

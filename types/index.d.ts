@@ -28,6 +28,8 @@ export type Source = {
 export type View = {
   sort: 'cited' | 'file' | 'kind'
   filter: 'all' | 'missing' | Kind
+  /** Under a heading per file or per kind, or as one list */
+  group: 'none' | 'file' | 'kind'
 }
 
 declare module 'claude-code' {

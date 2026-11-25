@@ -39,8 +39,8 @@ const sources = atom({ plugin: 'show-your-work', key: 'sources' } as const, [], 
 const reader = atom({ plugin: 'show-your-work', key: 'reader' } as const, '', { shape: 'reader-1' })
 const view = atom(
   { plugin: 'show-your-work', key: 'view' } as const,
-  { sort: 'cited', filter: 'all' },
-  { shape: 'view-1' },
+  { sort: 'cited', filter: 'all', group: 'none' },
+  { shape: 'view-2' },
 )
 
 /** The most kept: a session that cites more than this has long since scrolled
@@ -91,6 +91,8 @@ type Words = {
   count: (shown: number, all: number) => string
   sort: string
   sorts: Record<View['sort'], string>
+  group: string
+  groups: Record<View['group'], string>
   filter: string
   all: string
   missing: string
@@ -116,6 +118,8 @@ const EN: Words = {
   count: (shown, all) => (shown === all ? `${all} sources` : `${shown} of ${all} sources`),
   sort: 'Sort',
   sorts: { cited: 'In the order cited', file: 'By file', kind: 'By kind' },
+  group: 'Group',
+  groups: { none: 'One list', file: 'By file', kind: 'By kind' },
   filter: 'Show',
   all: 'All',
   missing: 'Not found',
@@ -149,6 +153,8 @@ const NB: Words = {
   count: (shown, all) => (shown === all ? `${all} kilder` : `${shown} av ${all} kilder`),
   sort: 'Sorter',
   sorts: { cited: 'I den rekkefølgen de ble vist til', file: 'Etter fil', kind: 'Etter type' },
+  group: 'Grupper',
+  groups: { none: 'Én liste', file: 'Etter fil', kind: 'Etter type' },
   filter: 'Vis',
   all: 'Alle',
   missing: 'Ikke funnet',
@@ -512,7 +518,38 @@ function arranged(list: readonly Source[], { sort, filter }: View): Source[] {
   return [...kept].sort((a, b) => a.n - b.n)
 }
 
+type Group = { key: string; title: string; items: Source[] }
+
+/** The arranged sources under a heading per file or per kind — files by
+ *  name, kinds in their fixed order; each group keeps the list's own order.
+ *  Ungrouped, one group with no heading. */
+function grouped(shown: readonly Source[], by: View['group'], the: Words): Group[] {
+  if (by === 'none') {
+    return [{ key: 'all', title: '', items: [...shown] }]
+  }
+
+  const groups = new Map<string, Group>()
+
+  for (const source of shown) {
+    const key = by === 'kind' ? source.kind : source.path
+    const title =
+      by === 'kind' ? the.kinds[source.kind] : source.kind === 'web' ? hostOf(source.path) : nameOf(source.path)
+    const group = groups.get(key) ?? { key, title, items: [] }
+
+    group.items.push(source)
+    groups.set(key, group)
+  }
+
+  return [...groups.values()].sort((a, b) =>
+    by === 'kind'
+      ? KINDS.indexOf(a.key as Kind) - KINDS.indexOf(b.key as Kind)
+      : a.title.localeCompare(b.title, undefined, { numeric: true }),
+  )
+}
+
 const isSort = (value: string): value is View['sort'] => ['cited', 'file', 'kind'].includes(value)
+
+const isGroup = (value: string): value is View['group'] => ['none', 'file', 'kind'].includes(value)
 
 const isFilter = (value: string): value is View['filter'] =>
   value === 'all' || value === 'missing' || (KINDS as readonly string[]).includes(value)
@@ -650,32 +687,57 @@ export const register: Register = on => {
               }
             }}
           />
+          <Select
+            key="group"
+            label={the.group}
+            value={how.group}
+            options={(['none', 'file', 'kind'] as const).map(value => ({ value, label: the.groups[value] }))}
+            onSelect={value => {
+              if (isGroup(value)) {
+                void update($, view, now => ({ ...now, group: value }))
+              }
+            }}
+          />
         </Box>
         <Text dimColor>{the.count(shown.length, list.length)}</Text>
         <Text> </Text>
         {shown.length === 0 && <Text dimColor>{the.noneFit}</Text>}
-        {shown.map(source => (
-          <Box flexDirection="column" key={`row-${source.n}`}>
-            <Box flexDirection="row" columnGap={1}>
-              <Button
-                key={`source-${source.n}`}
-                label={`${source.status === 'missing' ? '✗ ' : ''}${placeOf(source, the)}`}
-                dimColor={source.status === 'missing'}
-                onPress={() => show($, source)}
-              />
-              <Text dimColor>
-                {[
-                  source.kind === 'web' || placeOf(source, the) === nameOf(source.path) ? '' : nameOf(source.path),
-                  source.status === 'missing' ? the.missing.toLowerCase() : '',
-                  source.status === 'unchecked' ? the.unchecked : '',
-                ]
-                  .filter(part => part !== '')
-                  .join(' · ')}
+        {grouped(shown, how.group, the).map(group => (
+          <Box flexDirection="column" key={`group-${group.key}`}>
+            {group.title !== '' && (
+              <Text bold>
+                {group.title} ({group.items.length})
               </Text>
-            </Box>
-            {source.claim !== '' && <Text>{source.claim}</Text>}
-            <Text dimColor>«{source.quote.length > 160 ? `${source.quote.slice(0, 160)} …` : source.quote}»</Text>
-            <Text> </Text>
+            )}
+            {group.items.map(source => (
+              <Box flexDirection="column" key={`row-${source.n}`}>
+                <Box flexDirection="row" columnGap={1}>
+                  <Button
+                    key={`source-${source.n}`}
+                    label={`${source.status === 'missing' ? '✗ ' : ''}${placeOf(source, the)}`}
+                    dimColor={source.status === 'missing'}
+                    onPress={() => show($, source)}
+                  />
+                  <Text dimColor>
+                    {[
+                      // The file's name, unless the heading or the button already says it
+                      how.group === 'file' || source.kind === 'web' || placeOf(source, the) === nameOf(source.path)
+                        ? ''
+                        : nameOf(source.path),
+                      source.status === 'missing' ? the.missing.toLowerCase() : '',
+                      source.status === 'unchecked' ? the.unchecked : '',
+                    ]
+                      .filter(part => part !== '')
+                      .join(' · ')}
+                  </Text>
+                </Box>
+                {source.claim !== '' && <Text>{source.claim}</Text>}
+                <Text dimColor>
+                  «{source.quote.length > 160 ? `${source.quote.slice(0, 160)} …` : source.quote}»
+                </Text>
+                <Text> </Text>
+              </Box>
+            ))}
           </Box>
         ))}
       </Box>

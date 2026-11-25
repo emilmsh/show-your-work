@@ -34,8 +34,8 @@ got something from. That is the whole idea.
   program is started if it is not running.
 - **Keeps a list.** A **Sources** pane lists every source of the session, with
   the claim and the quoted words. Sort it by the order cited, by file or by
-  kind, and filter it by kind or to the ones that were not found.
-  `/sources` opens the pane.
+  kind, filter it by kind or to the ones that were not found, and group it
+  under a heading per file or per kind. `/sources` opens the pane.
 
 ## Sources it can show
 

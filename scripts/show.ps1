@@ -14,7 +14,7 @@
 # value must be cast to [void], or its "True" becomes part of the answer.
 #
 # ASCII only: Windows PowerShell reads a script without a byte-order mark as
-# ANSI, so a no-break space in a pattern is written  , never typed.
+# ANSI, so a no-break space in a pattern is written \u00a0, never typed.
 $ErrorActionPreference = 'Stop'
 [Console]::OutputEncoding = [Text.Encoding]::UTF8
 $req = $env:SYW_REQUEST | ConvertFrom-Json
@@ -114,6 +114,14 @@ function Show-Word {
     if ($show) { $doc = $app.Documents.Open($req.path); if (-not $app.Visible) { $app.Visible = $true } }
     else { $m = [Type]::Missing; $doc = $app.Documents.Open($req.path, $false, $true, $false, $m, $m, $m, $m, $m, $m, $m, $false) }
   }
+  # A document can be open with NO window on screen: one that was opened out
+  # of sight to check a quote and never closed (the check was stopped half
+  # way), or one another program holds. Shown means seen - measured: a press
+  # "worked", the answer said so, and nothing came up.
+  if ($show) {
+    if (-not $app.Visible) { $app.Visible = $true }
+    foreach ($w in $doc.Windows) { if (-not $w.Visible) { $w.Visible = $true } }
+  }
   $text = $doc.Content.Text
   $mt = [regex]::Match($text, (Pattern $req.quote))
   $res = @{ found = $mt.Success; wasOpen = -not $opened }
@@ -124,7 +132,7 @@ function Show-Word {
     $rng = $doc.Range($mt.Index - $cells, $mt.Index + $mt.Length - $cells - $inner)
     $res.exact = $rng.Text -eq $mt.Value
     $res.page = $rng.Information(3)
-    if ($show) { $doc.Activate(); $rng.Select(); $app.ActiveWindow.ScrollIntoView($rng, $true) }
+    if ($show) { $doc.Activate(); [void]$rng.Select(); $app.ActiveWindow.ScrollIntoView($rng, $true) }
   }
   if ($show) { $res.raised = Raise $app.ActiveWindow.Hwnd 'WINWORD' }
   elseif ($opened) { $doc.Close(0); if ($a.own) { $app.Quit() } }
@@ -158,6 +166,8 @@ function Show-PowerPoint {
   if ($hit) {
     $res.page = $hit.slide; $res.where = $hit.where
     if ($show) {
+      # Open without a window (a check that was never closed): give it one
+      if ($pres.Windows.Count -eq 0) { [void]$pres.NewWindow() }
       $win = $pres.Windows.Item(1); $win.Activate(); $win.View.GotoSlide($hit.slide)
       if ($hit.where -eq 'slide') { try { $hit.range.Characters($hit.m.Index + 1, $hit.m.Length).Select() } catch { $res.selectError = $true } }
     }
@@ -181,7 +191,12 @@ function Show-Excel {
   $app = $null; $wb = $null; $own = $false
   $files = [SywWin]::OpenFiles()
   foreach ($f in $files) { if ($f[0] -eq $req.path) { try { $x = $f[1].Application; if ($x.Name -eq 'Microsoft Excel') { $wb = $f[1]; $app = $x } } catch { } } }
-  if (-not $wb) {
+  if (-not $wb -and -not $show) {
+    # Only checked, never shown: in an Excel of this script's own, out of
+    # sight. Opened in the Excel on screen the workbook would come up in
+    # front of the reader and go away again.
+    $app = New-Object -ComObject Excel.Application; $app.DisplayAlerts = $false; $own = $true
+  } elseif (-not $wb) {
     foreach ($f in $files) { if (-not $app) { try { $x = $f[1].Application; if ($x.Name -eq 'Microsoft Excel' -and $x.Visible) { $app = $x } } catch { } } }
     if (-not $app) { try { $x = [Runtime.InteropServices.Marshal]::GetActiveObject('Excel.Application'); if ($x.Visible) { $app = $x } } catch { } }
     if (-not $app) { $app = New-Object -ComObject Excel.Application; $own = $true }
@@ -234,6 +249,7 @@ function Show-Excel {
     }
     if ($show) {
       if (-not $app.Visible) { $app.Visible = $true }
+      foreach ($w in $wb.Windows) { if (-not $w.Visible) { $w.Visible = $true } }
       $wb.Activate(); $ws.Activate()
       # A row, column or block is selected whole, and the view goes to the
       # cell in it that holds the value: a column's top can be far from it
