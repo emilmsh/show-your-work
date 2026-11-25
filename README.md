@@ -1,3 +1,5 @@
+<img src="assets/icon.svg" alt="Show your work icon" width="96" align="right">
+
 # Show your work
 
 A plugin for Claude Code that makes Claude show exactly where each claim comes
