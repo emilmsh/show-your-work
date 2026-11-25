@@ -253,8 +253,10 @@ function Show-Excel {
       $wb.Activate(); $ws.Activate()
       # A row, column or block is selected whole, and the view goes to the
       # cell in it that holds the value: a column's top can be far from it
-      if ($rng -and $res.at) { $app.Goto($ws.Range($res.at), $true); [void]$rng.Select(); [void]$ws.Range($res.at).Activate() }
-      elseif ($rng) { $app.Goto($rng, $true) }
+      # Scrolled only as far as it takes to bring the cell into view: scrolled
+      # to the corner, a cell loses the row labels and headings that say what it is
+      if ($rng -and $res.at) { $app.Goto($ws.Range($res.at), $false); [void]$rng.Select(); [void]$ws.Range($res.at).Activate() }
+      elseif ($rng) { $app.Goto($rng, $false) }
     }
   } catch { $res.error = 'no such sheet or cell' }
   if ($show) { $res.raised = Raise $app.Hwnd 'EXCEL' }

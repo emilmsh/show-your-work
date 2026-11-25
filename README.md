@@ -38,11 +38,25 @@ next session. To update by hand instead: `/plugin`, **Installed**,
 own automation, which this version does only on Windows. On another system the
 plugin installs but offers nothing.
 
+## Try it
+
+The [`demo`](demo) folder holds one small source of each kind, all about the
+same made-up evaluation: a Word report, a PowerPoint deck, an Excel model, a
+PDF appendix, meeting notes in Markdown and an R script. Start Claude Code in
+that folder and ask:
+
+```
+What did the school meals pilot do for attendance, what did it cost, and how
+sure can we be? Show me where each thing is said.
+```
+
+Then press the links in the answer.
+
 ## What it looks like
 
 ```
 The main finding holds for alternative specifications (report, p. 3), and the
-total cost is about 95 million kroner (model, AN250).
+total cost is about 9.5 million kroner a year (model, B2).
 ```
 
 The two places in brackets are links. The first opens `report.docx` in Word on
