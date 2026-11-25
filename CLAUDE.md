@@ -4,16 +4,21 @@ Claude cites a source through one tool, the plugin looks the words up in the
 file, and the citation becomes a link in the answer that opens the source at
 the words. Owner: Emil (communicates in Norwegian; code, comments and commit
 messages in English). User-facing strings in Norwegian and English, chosen by
-the machine's language (`words()` in `hooks/register.tsx`).
+the machine's language (`words()` in `hooks/words.ts`).
 
 Sister project: [PDF Scholar](https://github.com/emilmsh/pdf-scholar), which
 shows the PDFs. Its checkout is beside this one.
 
 ## Layout
 
-- `hooks/register.tsx` — the whole plugin: the tool, the numbering, the link
-  in the answer, the Sources pane. ONE module on purpose: the engine loads the
-  file named in `hooks/hooks.json`, and nothing here is built or bundled.
+- `hooks/register.tsx` — the hooks: the tool, the numbering, the link in the
+  answer, the offer above the prompt. The engine loads the file named in
+  `hooks/hooks.json` and follows its imports; nothing is built or bundled.
+- Beside it: `words.ts` (the reader's language), `source.ts` (a source's
+  kind, name and place, and the model's call read into one), `state.ts`
+  (every value kept, and the mode), `locate.ts` (looking a source up and
+  showing it — the Windows seam), `tell.ts` (what the model is told, and
+  reading it back out of the transcript), `pane.tsx` (the Sources pane).
 - `scripts/show.ps1` — everything that touches a program on Windows.
 - `types/index.d.ts` — the contract for what the plugin keeps in session
   state. Change a value's fields and you change its `shape` tag too.
@@ -39,22 +44,22 @@ What is Windows' own lives in exactly two places:
 
 1. `scripts/show.ps1` — Office through COM, Notepad through UI Automation,
    VS Code and the browser by their programs, window raising through Win32.
-2. `byPdfScholar` in `hooks/register.tsx` — PDF Scholar's install path
+2. `byPdfScholar` in `hooks/locate.ts` — PDF Scholar's install path
    (`%LOCALAPPDATA%\Programs\pdfx`) and its data folder.
 
-Everything else in `register.tsx` — the tool's contract, the numbering, the
+Everything else in `hooks/` — the tool's contract, the numbering, the
 kinds, the labels, the link in the answer, the pane, the state — must stay
 free of anything a system decides. The rules that keep it so:
 
 - **A new source kind is a contract first, a Windows way second.** Add the
-  kind, its label and its answer in `register.tsx` and the tests, and only
+  kind, its label and its answer in `source.ts`, `words.ts`, `tell.ts` and the tests, and only
   then the way to look it up and show it in `show.ps1`. If the look-up could
   be done without a program (reading a text file), do it without one.
 - **The script's request and answer are the seam.** `{ kind, path, quote,
   cell, show }` in, one JSON line `{ found, page, … }` or `{ error }` out.
   Another system gets its own script behind the same request and answer; it
   never gets a branch inside the Windows script.
-- **No path is split, joined or guessed in `register.tsx`** beyond taking a
+- **No path is split, joined or guessed in `hooks/`** beyond taking a
   file's name for a label. A path is the model's, passed through.
 - **On another system the plugin offers nothing** (`isWindows`): no tool, so
   the model is never let down by one. Keep that until the system has a way of
@@ -97,3 +102,7 @@ themselves.
 - A press may hold for ten seconds. Start the work and return.
 - A plugin must not be named like an MCP server whose tools it calls: both
   would own `mcp__<name>__…`.
+- Across files the engine follows `$` only into a FUNCTION DECLARATION
+  (`export function locate($ …)`), never into a `const f = ($) => …`; and
+  `read`/`update` must name an atom defined in the same file. That is why
+  every read and write of a kept value lives in `state.ts`.
