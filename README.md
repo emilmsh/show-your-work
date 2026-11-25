@@ -61,7 +61,7 @@ total cost is about 9.5 million kroner a year (model, B2).
 
 The two places in brackets are links. The first opens `report.docx` in Word on
 page 3 with the sentence selected. The second opens `model.xlsx` in Excel on
-cell AN250.
+cell B2.
 
 Checking an AI's work is much easier when it takes you to the exact place it
 got something from. That is the whole idea.
