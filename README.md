@@ -12,8 +12,33 @@ from. Every source Claude cites becomes a link in its answer. Press it and the
 file opens in its own program, at the cited words.
 </p>
 
+## Install
+
+You need Windows and Claude Code. In a Claude Code session, type:
+
+```
+/plugin install show-your-work --marketplace emilmsh/show-your-work
+```
+
+Confirm, and start a new session. That always installs the newest version.
+
+In the desktop app you can do the same by hand: **+** next to the prompt box,
+then **Plugins**, **Add marketplace** with `emilmsh/show-your-work`, then
+**Add plugin**.
+
+**Keep it up to date.** Claude Code does not update plugins from a third-party
+source by itself until you tell it to. Turn it on once: `/plugin`, then
+**Marketplaces**, choose `show-your-work`, and switch on auto-update. After
+that Claude Code fetches new versions and says *Plugin updated: show-your-work*
+when it has; `/reload-plugins` applies it at once, or it takes effect in your
+next session. To update by hand instead: `/plugin`, **Installed**,
+**Update now**.
+
 **Windows only, for now.** It drives Word, Excel and PowerPoint through their
-own automation, which this version does only on Windows.
+own automation, which this version does only on Windows. On another system the
+plugin installs but offers nothing.
+
+## What it looks like
 
 ```
 The main finding holds for alternative specifications (report, p. 3), and the
@@ -68,17 +93,6 @@ got something from. That is the whole idea.
   tools** in its settings menu, and **Read together** turned on in the same
   dialog. PDF Scholar's switches decide what is shared, here as everywhere: a
   document or folder you keep out there is not shown or read here either.
-
-## Install
-
-In a Claude Code terminal session:
-
-```
-/plugin install show-your-work --marketplace emilmsh/show-your-work
-```
-
-In the desktop app: **+** next to the prompt box, then **Plugins**, **Add
-marketplace** with `emilmsh/show-your-work`, then **Add plugin**.
 
 ## What it reads, runs and sends
 

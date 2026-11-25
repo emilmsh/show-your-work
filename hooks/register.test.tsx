@@ -34,6 +34,9 @@ type On = Parameters<Extract<Parameters<typeof test>[1], (...args: never[]) => u
 
 type Run = { argv: readonly string[]; request: Record<string, unknown>; stdin: string }
 
+/** The tools the plugin has registered, by name, in every test of this file's run */
+const registered: string[] = []
+
 /** A program that ran and wrote this */
 const ran = (stdout: string) => ({
   value: { exitCode: 0, stdout, stderr: '', isStdoutTruncated: false, isStderrTruncated: false },
@@ -44,11 +47,19 @@ const ran = (stdout: string) => ({
 function machine(
   on: On,
   script: (request: Record<string, unknown>) => Record<string, unknown> = () => ({ found: true, page: 3 }),
+  sysname = 'Windows_NT',
 ): Run[] {
   const runs: Run[] = []
 
+  on('session.machine', () => ({
+    value: { sysname, release: '10.0.26100', machine: 'x86_64', packageManagers: [], runtimes: [] },
+  }))
   on('session.start', (_, e) => ({ cwd: e.cwd }))
-  on('tool.register', () => ({ value: { tool: TOOL } }))
+  on('tool.register', (_, e) => {
+    registered.push(e.name)
+
+    return { value: { tool: TOOL } }
+  })
   on('command.register', () => ({ value: { command: 'sources' } }))
   on('ui.open', () => ({ value: { isPlaced: true } }))
   on('ui.toast', () => ({ value: undefined }))
@@ -309,4 +320,17 @@ test('a PDF goes to PDF Scholar: one session, and this plugin’s own numbers', 
     arguments: { path: PAPER, page: 6, quote: 'we use sine and cosine functions', claim: 'Sinusoids', number: 2, show: false },
   })
   expect(call(reader[1] as Run).arguments.number).toBe(3)
+})
+
+test('on a system that is not Windows the plugin offers nothing and starts nothing', async ($, on) => {
+  const runs = machine(on, undefined, 'Darwin')
+
+  registered.length = 0
+  await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
+
+  // No tool for the model to call and be let down by
+  expect(registered).toEqual([])
+  // …and one that is called all the same says why, and touches no program
+  expect(await cite($, { source: REPORT, quote: 'words' })).toMatch(/^DENIED: Show your work runs on Windows only for now/)
+  expect(runs.length).toBe(0)
 })

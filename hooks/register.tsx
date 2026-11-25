@@ -554,8 +554,27 @@ const isGroup = (value: string): value is View['group'] => ['none', 'file', 'kin
 const isFilter = (value: string): value is View['filter'] =>
   value === 'all' || value === 'missing' || (KINDS as readonly string[]).includes(value)
 
+/** Everything this plugin does to a program is Windows' (scripts/show.ps1,
+ *  PDF Scholar's install path). On another system it offers NOTHING — no tool
+ *  for the model to call and be let down by — until that system has a way of
+ *  its own. A machine that cannot be asked is taken for Windows: the script
+ *  then says what went wrong by itself. */
+async function isWindows($: EngineInterface): Promise<boolean> {
+  try {
+    return (await $.session.machine()).sysname === 'Windows_NT'
+  } catch {
+    return true
+  }
+}
+
+const ELSEWHERE = 'Show your work runs on Windows only for now, so it cannot check or open a source on this machine.'
+
 export const register: Register = on => {
   on('session.start', async ($, e, next) => {
+    if (!(await isWindows($))) {
+      return next(e)
+    }
+
     await $.tool.register({
       name: 'show_source',
       isDeferred: false,
@@ -591,6 +610,10 @@ export const register: Register = on => {
   })
 
   on('tool.run', { tool: 'mcp__show-your-work__show_source' }, async ($, e) => {
+    if (!(await isWindows($))) {
+      return { deny: ELSEWHERE }
+    }
+
     const input = e as unknown as Record<string, unknown>
     const path = typeof input.source === 'string' ? input.source.trim() : ''
     const kind = kindOf(path)
