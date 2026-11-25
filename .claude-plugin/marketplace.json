@@ -1,0 +1,12 @@
+{
+  "name": "show-your-work",
+  "description": "Show your work: Claude cites its sources as links that open the file at the cited words",
+  "owner": { "name": "Emil Mathias Strøm Halseth" },
+  "plugins": [
+    {
+      "name": "show-your-work",
+      "source": "./",
+      "description": "A link per cited source in Claude's answer, opening Word, Excel, PowerPoint, PDF, text, code and web sources at the cited words. Windows only for now."
+    }
+  ]
+}
