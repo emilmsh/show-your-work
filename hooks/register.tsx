@@ -514,6 +514,73 @@ function answerOf(source: Source, located: Located): string {
     : `${n}NOT FOUND: these words are not in ${name}. Treat the claim as unverified and tell the user.`
 }
 
+// ---------- The sources of a session ----------
+//
+// Two records, since the first one failed in the first session that had the
+// plugin INSTALLED rather than written into it (2026-11-25: eight sources
+// cited and checked, and the answer drawn with its bare «[1]» … «[8]» — the
+// same thing the plugin before this one met a day earlier):
+// - what the tool noted in the session's state as each call was answered;
+// - the session's own transcript: every answered show_source call, with what
+//   was asked and the answer's first line. This one needs nothing to have
+//   been noted, and holds for a session resumed later.
+// What was noted wins where both have a number; the transcript fills the rest.
+
+/** A source as the transcript holds a call: what the model asked, and what
+ *  the tool answered — «[3] Found word for word, p. 3 of report.docx.» */
+function sourceOf(tool: string, input: Record<string, unknown>, text: string | undefined): Source | undefined {
+  const n = Number(/^\[(\d{1,6})\]/.exec(text ?? '')?.[1] ?? 0)
+  const path = typeof input.source === 'string' ? input.source.trim() : ''
+  const kind = kindOf(path)
+
+  if (tool !== 'mcp__show-your-work__show_source' || text === undefined || n < 1 || kind === undefined) {
+    return undefined
+  }
+
+  return {
+    n,
+    kind,
+    path,
+    quote: typeof input.quote === 'string' ? input.quote.trim() : '',
+    cell: typeof input.cell === 'string' ? input.cell.trim() : '',
+    page: Number(/ (?:p\.|line|slide) (\d+) of /.exec(text)?.[1] ?? (typeof input.page === 'number' ? input.page : 0)),
+    claim: typeof input.claim === 'string' ? input.claim.trim() : '',
+    status: /NOT checked/.test(text)
+      ? 'unchecked'
+      : /NOT FOUND|does NOT match|holds no cell|Could not be checked/.test(text)
+        ? 'missing'
+        : 'found',
+  }
+}
+
+/** Every source of the session: noted ones first, the transcript's for any
+ *  number nobody noted, in the order of their numbers */
+async function known($: EngineInterface): Promise<Source[]> {
+  const noted = await read($, sources)
+  const all = new Map(noted.map(one => [one.n, one]))
+
+  try {
+    const messages = await $.session.messages({ last: 400 })
+
+    if (!('deny' in messages)) {
+      for (const message of messages) {
+        for (const use of message.toolUses ?? []) {
+          const made = sourceOf(use.tool, use.input as Record<string, unknown>, use.text)
+
+          // The newest call of a number is the one kept
+          if (made !== undefined && !noted.some(one => one.n === made.n)) {
+            all.set(made.n, made)
+          }
+        }
+      }
+    }
+  } catch {
+    // Then only what was noted
+  }
+
+  return [...all.values()].sort((a, b) => a.n - b.n)
+}
+
 // ---------- The pane ----------
 
 /** The sources the pane lists, as the reader has it arranged */
@@ -785,7 +852,7 @@ export const register: Register = on => {
   on('ui.render', { component: 'Pane', requestId: PANE }, async ($, e) => {
     const { Box, Text, Button, Select } = $.ui.resolve(e)
     const the = words()
-    const list = await read($, sources)
+    const list = await known($)
     const how = await read($, view)
     const shown = arranged(list, how)
     const kinds = KINDS.filter(kind => list.some(one => one.kind === kind))
@@ -915,7 +982,7 @@ export const register: Register = on => {
       return next(e)
     }
 
-    const list = await read($, sources)
+    const list = await known($)
     const mine = [...new Set(cited)]
       .map(n => list.find(one => one.n === n))
       .filter((one): one is Source => one !== undefined)

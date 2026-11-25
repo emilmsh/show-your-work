@@ -37,6 +37,9 @@ type Run = { argv: readonly string[]; request: Record<string, unknown>; stdin: s
 /** The tools the plugin has registered, by name, in every test of this file's run */
 const registered: string[] = []
 
+/** What the session's own record holds of earlier calls; a test sets it */
+let transcript: { role: 'assistant'; text: string; toolUses: { tool_use_id: string; tool: string; input: Record<string, unknown>; text: string }[] }[] = []
+
 /** …and what each told the model about itself */
 const described: string[] = []
 
@@ -54,6 +57,7 @@ function machine(
 ): Run[] {
   const runs: Run[] = []
 
+  on('session.messages', () => ({ value: transcript as never }))
   on('session.machine', () => ({
     value: { sysname, release: '10.0.26100', machine: 'x86_64', packageManagers: [], runtimes: [] },
   }))
@@ -422,4 +426,49 @@ test('a turn that read documents and cited none is offered its sources in one pr
   await $.tool.call({ tool: 'Read', file_path: REPORT } as never)
   await cite($, { source: REPORT, quote: 'words' })
   expect(await offer()).toBe(undefined)
+})
+
+test('a source nobody noted is read from the transcript: the link is drawn all the same', async ($, on) => {
+  // The first session with the plugin installed (2026-11-25): eight sources
+  // cited and checked, nothing in the session's state when the answer was
+  // drawn, and the answer shown with its bare numbers.
+  machine(on)
+  transcript = [
+    {
+      role: 'assistant',
+      text: '',
+      toolUses: [
+        { tool_use_id: 'a', tool: 'Bash', input: { command: 'ls' }, text: '[1] not ours' },
+        {
+          tool_use_id: 'b',
+          tool: TOOL,
+          input: { source: REPORT, quote: 'Attendance rose by 4.2 percentage points' },
+          text: '[1] Found word for word, p. 3 of report.docx.',
+        },
+        {
+          tool_use_id: 'c',
+          tool: TOOL,
+          input: { source: MODEL, cell: 'Results!B2', quote: '12 000 000' },
+          text: '[2] Results · B2 of model.xlsx shows «9537600»: does NOT match the value cited.',
+        },
+      ],
+    },
+  ]
+
+  const ui = await $.ui.mount({
+    ...ANSWER,
+    surface: 'desktop',
+    props: { text: 'Attendance rose [1]. It cost twelve million [2].', isFirstOfReply: true },
+  })
+  const text = String((await ui.find({ type: 'Markdown', key: 'answer' }))?.props.text)
+
+  expect(text).toMatch(/^Attendance rose \[report, (p|s)\. 3\]\(https:\/\/source\.invalid\/1\)\. /)
+  expect(text).toMatch(/It cost twelve million \[✗ model, B2\]\(https:\/\/source\.invalid\/2\)\.$/)
+  await ui.unmount()
+
+  // The pane lists them too
+  const pane = await $.ui.mount({ ...PANE, surface: 'desktop' })
+  expect((await pane.findAll({ type: 'Button' })).map(button => button.key)).toEqual(['source-1', 'source-2'])
+  await pane.unmount()
+  transcript = []
 })
