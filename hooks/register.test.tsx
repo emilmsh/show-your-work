@@ -195,8 +195,8 @@ test('the number in an answer is drawn as a link that reads as the place', async
     const text = String((await ui.find({ type: 'Markdown', key: 'answer' }))?.props.text)
 
     // «p. 7» on an English machine, «s. 7» on a Norwegian one; the number is gone
-    expect(text).toMatch(/^One claim \[(p|s)\. 7\]\(https:\/\/source\.invalid\/1\)\. /)
-    expect(text).toMatch(/Another \[✗ report\.docx\]\(https:\/\/source\.invalid\/2\)\./)
+    expect(text).toMatch(/^One claim \[report, (p|s)\. 7\]\(https:\/\/source\.invalid\/1 "C:\/work\/report\.docx"\)\. /)
+    expect(text).toMatch(/Another \[✗ report\.docx\]\(https:\/\/source\.invalid\/2 "C:\/work\/report\.docx"\)\./)
     expect(text).toMatch(/Not ours \[9\], nor «\[1\]», \[17–19\] or \[1\]\(https:\/\/example\.org\)\.$/)
 
     await ui.press({ key: 'answer', link: { href: 'https://source.invalid/1' } })
@@ -205,6 +205,21 @@ test('the number in an answer is drawn as a link that reads as the place', async
 
   // A press asks the script to SHOW, the same source, once per surface
   expect(runs.filter(run => run.request.show === true).map(run => run.request.quote)).toEqual(['first', 'first'])
+})
+
+test('a link always names its file, a long name by its head and tail, with the path as its title', async ($, on) => {
+  machine(on)
+
+  await cite($, { source: 'C:\\work\\Evaluation of the school meals pilot 2025 final v3.docx', quote: 'words' })
+  await cite($, { source: 'https://example.org/report', quote: 'some words' })
+
+  const ui = await $.ui.mount({ ...ANSWER, surface: 'desktop', props: { text: 'A [1] and B [2].', isFirstOfReply: true } })
+  const text = String((await ui.find({ type: 'Markdown', key: 'answer' }))?.props.text)
+
+  expect(text).toMatch(
+    /^A \[Evaluation of the…final v3, (p|s)\. 3\]\(https:\/\/source\.invalid\/1 "C:\/work\/Evaluation of the school meals pilot 2025 final v3\.docx"\) and B \[example\.org\]\(https:\/\/source\.invalid\/2\)\.$/,
+  )
+  await ui.unmount()
 })
 
 test('an answer that rests on several files names the file in each link', async ($, on) => {
@@ -220,7 +235,7 @@ test('an answer that rests on several files names the file in each link', async 
   })
   const text = String((await ui.find({ type: 'Markdown', key: 'answer' }))?.props.text)
 
-  expect(text).toMatch(/^A \[report, (p|s)\. 3\]\(https:\/\/source\.invalid\/1\) and B \[model, (column|kolonne) C\]\(https:\/\/source\.invalid\/2\)\.$/)
+  expect(text).toMatch(/^A \[report, (p|s)\. 3\]\(https:\/\/source\.invalid\/1 "[^"]+"\) and B \[model, (column|kolonne) C\]\(https:\/\/source\.invalid\/2 "[^"]+"\)\.$/)
   await ui.unmount()
 })
 
@@ -462,8 +477,8 @@ test('a source nobody noted is read from the transcript: the link is drawn all t
   })
   const text = String((await ui.find({ type: 'Markdown', key: 'answer' }))?.props.text)
 
-  expect(text).toMatch(/^Attendance rose \[report, (p|s)\. 3\]\(https:\/\/source\.invalid\/1\)\. /)
-  expect(text).toMatch(/It cost twelve million \[✗ model, B2\]\(https:\/\/source\.invalid\/2\)\.$/)
+  expect(text).toMatch(/^Attendance rose \[report, (p|s)\. 3\]\(https:\/\/source\.invalid\/1 "[^"]+"\)\. /)
+  expect(text).toMatch(/It cost twelve million \[✗ model, B2\]\(https:\/\/source\.invalid\/2 "[^"]+"\)\.$/)
   await ui.unmount()
 
   // The pane lists them too

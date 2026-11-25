@@ -264,17 +264,29 @@ function placeOf(source: Source, the: Words): string {
 
 /** What stands IN THE SENTENCE where the model wrote «[3]»: the place, as a
  *  paper cites it. An answer resting on several files names the file too. */
-function inline(source: Source, isNamed: boolean, the: Words): string {
+function inline(source: Source, the: Words): string {
   const place = source.kind === 'excel' ? excelPlace(source.cell, false, the) : placeOf(source, the)
   const name = nameOf(source.path)
+  // The file is ALWAYS named: «p. 17» alone says nothing in a session that
+  // reads many documents (Emil, 2026-11-25 — an answer about four countries'
+  // reports, every link a bare page). A web page is its host already.
   const text =
-    isNamed && source.kind !== 'web' && place !== name
-      ? `${name.replace(/\.[a-z0-9]+$/i, '')}, ${place}`
-      : place
+    source.kind === 'web' || place === name
+      ? shortened(place)
+      : `${shortened(name.replace(/\.[a-z0-9]+$/i, ''))}, ${place}`
 
   // Nothing of a file's name may end the link early or start a new one
   return `${source.status === 'missing' ? '✗ ' : ''}${text}`.replace(/[[\]\\]/g, '')
 }
+
+/** A long name by its head and its tail, where names that begin alike differ */
+const shortened = (name: string): string =>
+  name.length > 30 ? `${name.slice(0, 18).trimEnd()}…${name.slice(-9).trimStart()}` : name
+
+/** The link's title, shown on hover: the whole path, which the link's text
+ *  has no room for. No quote or line break may end the title early. */
+const titled = (source: Source): string =>
+  source.kind === 'web' ? '' : ` "${source.path.replace(/\\/g, '/').replace(/["\r\n]/g, '')}"`
 
 // ---------- Looking a source up, and showing it ----------
 
@@ -993,14 +1005,13 @@ export const register: Register = on => {
 
     const { Markdown } = $.ui.resolve(e)
     const the = words()
-    const isNamed = new Set(mine.map(source => source.path)).size > 1
     const byHref = new Map(mine.map(source => [`${HREF}${source.n}`, source]))
     // «[3]» in the sentence becomes a link that reads as the place; a number
     // that is no source of ours stays as written
     const text = e.props.text.replace(CITED, (whole, digits: string) => {
       const source = mine.find(one => one.n === Number(digits))
 
-      return source === undefined ? whole : ` [${inline(source, isNamed, the)}](${HREF}${source.n})`
+      return source === undefined ? whole : ` [${inline(source, the)}](${HREF}${source.n}${titled(source)})`
     })
 
     // The answer is drawn here, not by `next`: only a Markdown of the
