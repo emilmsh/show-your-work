@@ -95,14 +95,23 @@ function App([string]$progId) {
   try { @{ app = [Runtime.InteropServices.Marshal]::GetActiveObject($progId); own = $false } }
   catch { @{ app = New-Object -ComObject $progId; own = $true } }
 }
-# Whitespace of any kind matches any other; a footnote, cell or field mark
-# may sit between any two characters
+# Whitespace of any kind matches any other; a footnote, cell or field mark, or
+# a hyphen that only shows at a line's end, may sit between any two
+# characters. A quotation mark matches any other of its kind and a hyphen any
+# other hyphen: whoever quotes types the plain one for the typeset one.
 function Pattern([string]$q) {
-  $marks = '[\x01\x02\x07\x0b\x13-\x15]'
-  $parts = ($q.Trim() -split '[\s\u00a0]+') | ForEach-Object {
-    (($_.ToCharArray() | ForEach-Object { [regex]::Escape([string]$_) }) -join "$marks*")
+  $marks = '[\x01\x02\x07\x0b\x13-\x15\x1f\u00ad\u200b]'
+  $kinds = @('[''\u2018\u2019\u201a\u2032]', '["\u201c\u201d\u201e\u00ab\u00bb\u2033]', '[-\u2010\u2011\x1e]')
+  $one = {
+    param([string]$c)
+    foreach ($kind in $kinds) { if ([regex]::IsMatch($c, $kind)) { return $kind } }
+    [regex]::Escape($c)
   }
-  $parts -join '[\s\u00a0\x01\x02\x07\x0b\x13-\x15]+'
+  $q = [regex]::Replace($q, '[\x1f\u00ad\u200b]', '')
+  $parts = ($q.Trim() -split '[\s\u00a0\u202f]+') | ForEach-Object {
+    (($_.ToCharArray() | ForEach-Object { & $one ([string]$_) }) -join "$marks*")
+  }
+  $parts -join '[\s\u00a0\u202f\x01\x02\x07\x0b\x13-\x15]+'
 }
 
 function Show-Word {
@@ -122,17 +131,57 @@ function Show-Word {
     if (-not $app.Visible) { $app.Visible = $true }
     foreach ($w in $doc.Windows) { if (-not $w.Visible) { $w.Visible = $true } }
   }
-  $text = $doc.Content.Text
-  $mt = [regex]::Match($text, (Pattern $req.quote))
+  # The body first, then the footnotes and the endnotes: each is a text of its
+  # own in Word (a "story"), with places of its own
+  $story = $null; $mt = [regex]::Match('', 'x')
+  foreach ($kind in 1, 2, 3) {
+    if (-not $mt.Success) {
+      try { $story = $doc.StoryRanges.Item($kind); $mt = [regex]::Match([string]$story.Text, (Pattern $req.quote)) } catch { }
+    }
+  }
   $res = @{ found = $mt.Success; wasOpen = -not $opened }
   if ($mt.Success) {
-    # A table cell's end is two characters in .Text and ONE position in the story
-    $cells = ([regex]::Matches($text.Substring(0, $mt.Index), '\x07')).Count
-    $inner = ([regex]::Matches($mt.Value, '\x07')).Count
-    $rng = $doc.Range($mt.Index - $cells, $mt.Index + $mt.Length - $cells - $inner)
-    $res.exact = $rng.Text -eq $mt.Value
-    $res.page = $rng.Information(3)
-    if ($show) { $doc.Activate(); [void]$rng.Select(); $app.ActiveWindow.ScrollIntoView($rng, $true) }
+    $base = $story.Start; $last = $story.End
+    $span = { param([int]$a, [int]$b) $r = $story.Duplicate; $r.SetRange($a, $b); $r }
+    # WHERE in the document the words are. A place in .Text is not a place in
+    # the document: a field's code (every entry of a table of contents, every
+    # cross-reference, link and citation), a table cell's end and more take
+    # room in the document and none, or another amount, in its text. Counted
+    # by hand the place came out pages too early in any real report (measured
+    # 2026-11-26: a quote on page 25 answered as page 19, and the press went
+    # to other words). So the place is ASKED for: the text in front of a
+    # position only grows with the position, and the position with exactly
+    # the match's text in front of it is searched out.
+    $before = { param([int]$p) if ($p -le $base) { 0 } else { ([string](& $span $base $p).Text).Length } }
+    $lo = $base; $hi = $last
+    while ($lo -lt $hi) {
+      $mid = [int][Math]::Ceiling(($lo + $hi) / 2)
+      if ((& $before $mid) -le $mt.Index) { $lo = $mid } else { $hi = $mid - 1 }
+    }
+    $from = $lo
+    # The end, from there: the shortest stretch that holds all the words
+    $lo = $from + 1; $hi = [Math]::Min($last, $from + 2 * $mt.Length + 2000)
+    while ($lo -lt $hi) {
+      $mid = [int][Math]::Floor(($lo + $hi) / 2)
+      if (([string](& $span $from $mid).Text).Length -ge $mt.Length) { $hi = $mid } else { $lo = $mid + 1 }
+    }
+    $rng = & $span $from $lo
+    # Said only when it holds: the words at the place are the words found
+    $res.exact = ([string]$rng.Text) -eq $mt.Value
+    if (-not $res.exact) {
+      # Not pinned down that way: Word's own search, on the words' opening
+      # (it takes 255 characters at most, and no line break). Failing that
+      # too the place is left UNSAID - no page, nothing selected - which is
+      # better than the wrong one.
+      $res.at = ([string]$rng.Text)
+      $head = ([regex]::Split($mt.Value, '[\x01\x02\x07\x0b\r\n\x13-\x15]')[0])
+      $head = $head.Substring(0, [Math]::Min(60, $head.Length))
+      $rng = $story.Duplicate
+      if ($head.Length -lt 8 -or -not $rng.Find.Execute($head, $true)) { $rng = $null }
+    }
+    if ($rng) { $res.page = $rng.Information(3) }
+    if ($show -and -not $rng) { $doc.Activate() }
+    elseif ($show) { $doc.Activate(); [void]$rng.Select(); $app.ActiveWindow.ScrollIntoView($rng, $true) }
   }
   if ($show) { $res.raised = Raise $app.ActiveWindow.Hwnd 'WINWORD' }
   elseif ($opened) { $doc.Close(0); if ($a.own) { $app.Quit() } }

@@ -34,6 +34,17 @@ Use Claude Code 2.1.330 or later (`claude` on the PATH may be older).
 - `claude plugin test .`
 - Type-check with the `tsconfig.json` here, once the engine has laid its types
   in `.claude-plugin/types/` (it does when the plugin has been loaded once).
+- The look-up itself (`scripts/show.ps1`), against the real programs, nothing
+  shown on screen. Run both after any change to the script:
+  - `scripts/test/make-word.ps1 <out.docx>` then `scripts/test/check-word.ps1
+    <out.docx>`: a Word report with a table of contents, fields, footnotes, a
+    table, links, a tracked deletion and hidden text. Each marked passage must
+    come back on the page Word's own search puts it on, with the words at the
+    place being the words asked for (`exact`). The demo's `report.docx` has
+    none of those and cannot catch a wrong place: on 2026-11-26 a real report
+    answered page 19 for words on page 25.
+  - `scripts/test/check-kinds.ps1`: PowerPoint, Excel, text and code from
+    `demo/`, with words that are there and words that are not.
 
 ## Platforms: one seam, and nothing Windows-shaped outside it
 
