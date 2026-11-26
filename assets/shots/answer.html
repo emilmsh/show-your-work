@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<title>An answer with its sources</title>
+<link rel="stylesheet" href="shots.css">
+<body>
+<div class="window">
+  <div class="bar"><span class="app app-c">C</span><span class="title">Claude Code · school-meals</span><span class="ctl"><i class="min"></i><i class="max"></i><i class="x"></i></span></div>
+  <div class="cols">
+    <div class="chat">
+      <div class="ask">What did the pilot achieve, and what did it cost?</div>
+      <div class="answer">
+        <p>The pilot raised attendance by 4.2 percentage points compared with matched schools that did not take part <a class="src">report, p. 1</a>, and the effect is largest for pupils in the lowest income quartile. The estimate comes from a difference-in-differences model with school and year fixed effects <a class="src">analysis, line 14</a>, with standard errors clustered at the school level <a class="src">appendix, p. 2</a>.</p>
+        <p>There is no effect on test scores in the first two years <a class="src">report, p. 2</a>.</p>
+        <h3>Cost</h3>
+        <p>The model puts the total at 9.5 million kroner a year <a class="src">model, B2</a>, which is 4,800 kroner per pupil <a class="src">model, B3</a>. The deck recommends two more years <a class="src">slides, slide 4</a>.</p>
+        <p>One figure I could not confirm: the meeting notes do not say that all 170 schools reported <a class="src bad">✗ notes</a>. They say 160.</p>
+      </div>
+    </div>
+    <div class="pane">
+      <h2>Sources</h2>
+      <div class="selects">
+        <span class="select">Cite <b>By itself</b> ▾</span>
+      </div>
+      <div class="selects">
+        <span class="select">Sort <b>In the order cited</b> ▾</span>
+        <span class="select">Show <b>All (8)</b> ▾</span>
+        <span class="select">Group <b>One list</b> ▾</span>
+      </div>
+      <div class="count">8 sources</div>
+      <div class="row">
+        <div class="head"><span class="chip">p. 1</span><span class="file">report.docx</span></div>
+        <div>The pilot raised attendance by 4.2 percentage points.</div>
+        <div class="quote">«Attendance rose by 4.2 percentage points in the pilot schools, compared with matched schools that did not take part.»</div>
+      </div>
+      <div class="row">
+        <div class="head"><span class="chip">line 14</span><span class="file">analysis.R</span></div>
+        <div>The model has school and year fixed effects.</div>
+        <div class="quote">«feols(attendance ~ pilot:post | school + year, data = panel)»</div>
+      </div>
+      <div class="row">
+        <div class="head"><span class="chip">p. 2</span><span class="file">appendix.pdf</span></div>
+        <div>Standard errors are clustered by school.</div>
+        <div class="quote">«Standard errors are clustered at the school level»</div>
+      </div>
+      <div class="row">
+        <div class="head"><span class="chip">Results · B2</span><span class="file">model.xlsx</span></div>
+        <div>The pilot costs 9.5 million kroner a year.</div>
+        <div class="quote">«9 537 600»</div>
+      </div>
+      <div class="row">
+        <div class="head"><span class="chip bad">✗ notes.md</span><span class="file">not found</span></div>
+        <div>All 170 schools reported.</div>
+        <div class="quote">«attendance records for all 170 schools»</div>
+      </div>
+    </div>
+  </div>
+</div>
+</body>
+</html>

@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<title>A press opens the file at the words</title>
+<link rel="stylesheet" href="shots.css">
+<style>
+  .back { left: 0; top: 0; width: 760px; height: 460px; grid-template-rows: 44px 1fr; }
+  .back .chat { padding: 30px 40px; }
+  .back .answer { font-size: 16px; }
+  .word { left: 540px; top: 150px; width: 860px; height: 560px; }
+  .excel { left: 90px; top: 520px; width: 560px; height: 250px; grid-template-rows: 36px 34px 1fr 30px; }
+  .excel .bar, .word .bar { background: #f4f2ea; }
+  /* From each link to the place it opens: drawn over the windows */
+  .arrows { position: absolute; inset: 0; width: 1400px; height: 770px; pointer-events: none; }
+  .arrows path { fill: none; stroke: #8fa6d6; stroke-width: 2; stroke-linecap: round; }
+  .arrows .head { fill: #8fa6d6; stroke: none; }
+</style>
+<body>
+<div class="stage">
+  <div class="window back">
+    <div class="bar"><span class="app app-c">C</span><span class="title">Claude Code · school-meals</span><span class="ctl"><i class="min"></i><i class="max"></i><i class="x"></i></span></div>
+    <div class="chat">
+      <div class="answer">
+        <p style="margin-bottom: 84px">The pilot raised attendance by 4.2 percentage points compared with matched schools that did not take part <a class="src pressed">report, p. 1</a>, and the effect is largest for pupils in the lowest income quartile.</p>
+        <p>The total is 9.5 million kroner a year <a class="src pressed">model, B2</a>.</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="window word">
+    <div class="bar"><span class="app app-w">W</span><span class="title">report.docx · Word</span><span class="ctl"><i class="min"></i><i class="max"></i><i class="x"></i></span></div>
+    <div class="doc">
+      <div class="sheet">
+        <h1>School meals pilot: evaluation 2025</h1>
+        <h4>1 Summary</h4>
+        <p>In 2023 forty primary schools began serving a free lunch every school day. This report evaluates what the pilot did for attendance and what it cost.</p>
+        <p><mark>Attendance rose by 4.2 percentage points in the pilot schools, compared with matched schools that did not take part.</mark> The effect is largest for pupils in the lowest income quartile.</p>
+        <p>We find no effect on test scores in the first two years. Two years is a short time for an effect on learning to show.</p>
+        <h4>2 Background</h4>
+        <p>The pilot was decided in 2022 and covers schools in four municipalities, chosen among those that applied.</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="window excel">
+    <div class="bar"><span class="app app-x">X</span><span class="title">model.xlsx · Excel</span><span class="ctl"><i class="min"></i><i class="max"></i><i class="x"></i></span></div>
+    <div class="formula">B2 &nbsp; =Assumptions!B2*Assumptions!B3</div>
+    <div class="grid">
+      <table>
+        <tr><th style="width:36px"></th><th>A</th><th style="width:150px">B</th></tr>
+        <tr><th>1</th><td><b>Measure</b></td><td><b>Value</b></td></tr>
+        <tr><th>2</th><td>Total cost per year (kroner)</td><td class="n sel">9 537 600</td></tr>
+        <tr><th>3</th><td>Cost per pupil per school day (kroner)</td><td class="n">25.26</td></tr>
+      </table>
+    </div>
+    <div class="tabs">Assumptions &nbsp;&nbsp; <b>Results</b></div>
+  </div>
+  <svg class="arrows" viewBox="0 0 1400 770">
+    <defs>
+      <marker id="head" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+        <path class="head" d="M0 0 L10 5 L0 10 z"/>
+      </marker>
+    </defs>
+    <path d="M 176 134 C 340 135, 580 240, 716 430" marker-end="url(#head)"/>
+    <path d="M 336 246 C 340 400, 450 500, 640 652" marker-end="url(#head)"/>
+  </svg>
+</div>
+</body>
+</html>

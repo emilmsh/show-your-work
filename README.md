@@ -12,6 +12,16 @@ from. Every source Claude cites becomes a link in its answer. Press it and the
 file opens in its own program, at the cited words.
 </p>
 
+<p align="center">
+  <img src="assets/shots/press.png" alt="A press on a source link opens the Word report at the cited sentence, and another opens the Excel workbook at the cited cell" width="860">
+</p>
+
+<p align="center">
+  <img src="assets/shots/answer.png" alt="An answer in Claude Code with a source link after each claim, and the Sources pane beside it listing every source with its claim and quote" width="860">
+</p>
+
+<p align="center"><sub>Illustrations drawn from the demo files in <code>demo/</code>. The windows are simplified.</sub></p>
+
 ## Install
 
 You need Windows and Claude Code. In a Claude Code session, type:
