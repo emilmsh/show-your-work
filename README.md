@@ -16,11 +16,7 @@ file opens in its own program, at the cited words.
   <img src="assets/shots/press.png" alt="A press on a source link opens the Word report at the cited sentence, and another opens the Excel workbook at the cited cell" width="860">
 </p>
 
-<p align="center">
-  <img src="assets/shots/answer.png" alt="An answer in Claude Code with a source link after each claim, and the Sources pane beside it listing every source with its claim and quote" width="860">
-</p>
-
-<p align="center"><sub>Illustrations drawn from the demo files in <code>demo/</code>. The windows are simplified.</sub></p>
+<p align="center"><sub>An illustration, drawn from the demo files in <code>demo/</code>. The windows are simplified.</sub></p>
 
 ## Install
 
@@ -87,14 +83,17 @@ me where it says that" when a claim matters to you.
 
 ## What it looks like
 
-```
-The main finding holds for alternative specifications (report, p. 3), and the
-total cost is about 9.5 million kroner a year (model, B2).
-```
+<p align="center">
+  <img src="assets/shots/answer.png" alt="An answer in Claude Code with a source link after each claim, and the Sources pane beside it listing every source with its claim and quote" width="860">
+</p>
 
-The two places in brackets are links. The first opens `report.docx` in Word on
-page 3 with the sentence selected. The second opens `model.xlsx` in Excel on
-cell B2.
+Each small label in the answer is a link, named by the file and the place in
+it. «report, p. 1» opens `report.docx` in Word on page 1 with the sentence
+selected, and «model, B2» opens `model.xlsx` in Excel on cell B2. A quote that
+is not in the file is marked ✗, so you see what Claude could not back up.
+
+The Sources pane lists every source of the session with the claim it backs
+and the words quoted. (The picture is an illustration, like the one above.)
 
 Checking an AI's work is much easier when it takes you to the exact place it
 got something from. That is the whole idea.
