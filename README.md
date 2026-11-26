@@ -129,6 +129,16 @@ got something from. That is the whole idea.
 | HTML files | The words, scrolled to and marked by your default browser | A text-fragment link |
 | Web pages (`https://…`) | The same. **The page is never fetched, so the words are never checked**: the pane says *not checked* | A text-fragment link |
 
+A PDF opens in [PDF Scholar](https://github.com/emilmsh/pdf-scholar), which
+marks the words on the page and keeps its own list of what Claude has pointed
+at:
+
+<p align="center">
+  <img src="assets/shots/pdf.png" alt="A press on a source link opens the PDF in PDF Scholar on page 2 with the cited sentence marked, and the passage listed among the references from AI tools" width="860">
+</p>
+
+<p align="center"><sub>An illustration, like the ones above.</sub></p>
+
 ## What you need
 
 - Windows 10 or 11, and Claude Code 2.1.330 or later, in the terminal or in

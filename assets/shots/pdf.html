@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<title>A press opens the PDF in PDF Scholar at the words</title>
+<link rel="stylesheet" href="shots.css">
+<style>
+  .back { left: 0; top: 0; width: 720px; height: 420px; grid-template-rows: 44px 1fr; }
+  .back .chat { padding: 30px 40px; }
+  .back .answer { font-size: 16px; }
+  .reader { left: 330px; top: 170px; width: 1070px; height: 600px; grid-template-rows: 44px 40px 1fr; }
+  .reader .bar { background: #f4f2ea; }
+  .bar img { width: 20px; height: 20px; flex: none; }
+  .tools { display: flex; align-items: center; gap: 18px; padding: 0 16px; border-bottom: 1px solid var(--line); background: #fbfaf6; color: var(--dim); font-size: 12.5px; }
+  .tools b { color: var(--ink); font-weight: 500; }
+  .tools .gap { flex: 1; }
+  .view { display: grid; grid-template-columns: 1fr 330px; min-height: 0; }
+  .view .doc { padding: 24px 0; }
+  .view .sheet { width: 560px; padding: 54px 60px; min-height: 800px; }
+  .refs { border-left: 1px solid var(--line); background: #fff; padding: 18px 20px; font-size: 13.5px; line-height: 1.45; }
+  .refs h2 { font: 600 14px/1.2 "Segoe UI", sans-serif; margin: 0 0 4px; }
+  .refs .sub { color: var(--dim); font-size: 12.5px; margin-bottom: 16px; }
+  .card { border: 1px solid var(--line); border-radius: 10px; padding: 11px 13px; margin-bottom: 10px; background: var(--paper); }
+  .card.now { border-color: #b9c8e6; background: #f5f8fd; }
+  .card .head { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; }
+  .card .n { color: var(--dim); font-size: 12.5px; }
+  .card .quote { color: var(--dim); }
+  .arrows { position: absolute; inset: 0; width: 1400px; height: 770px; pointer-events: none; }
+  .arrows path { fill: none; stroke: #8fa6d6; stroke-width: 2; stroke-linecap: round; }
+  .arrows .head { fill: #8fa6d6; stroke: none; }
+</style>
+<body>
+<div class="stage">
+  <div class="window back">
+    <div class="bar"><span class="app app-c">C</span><span class="title">Claude Code · school-meals</span><span class="ctl"><i class="min"></i><i class="max"></i><i class="x"></i></span></div>
+    <div class="chat">
+      <div class="answer">
+        <p>The standard errors are clustered at the school level <a class="src pressed">appendix, p. 2</a>, and the two groups followed parallel trends before the pilot.</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="window reader">
+    <div class="bar"><img src="pdf-scholar.svg" alt=""><span class="title">appendix.pdf · PDF Scholar</span><span class="ctl"><i class="min"></i><i class="max"></i><i class="x"></i></span></div>
+    <div class="tools"><span>Page <b>2</b> of 2</span><span>100 %</span><span class="gap"></span><span>Search</span><span><b>Assistant</b></span></div>
+    <div class="view">
+      <div class="doc">
+        <div class="sheet">
+          <h4 style="margin-top: 0">A.2 Inference</h4>
+          <p><mark>Standard errors are clustered at the school level</mark>, since attendance is correlated among pupils of the same school.</p>
+          <p>The pre-pilot trends of the two groups are parallel: none of the six pre-period coefficients differs from zero at the five per cent level.</p>
+        </div>
+      </div>
+      <div class="refs">
+        <h2>References from AI tools</h2>
+        <div class="sub">This document · newest first</div>
+        <div class="card now">
+          <div class="head"><span class="chip">p. 2</span><span class="n">found word for word</span></div>
+          <div>Standard errors are clustered by school.</div>
+          <div class="quote">«Standard errors are clustered at the school level»</div>
+        </div>
+        <div class="card">
+          <div class="head"><span class="chip">p. 2</span><span class="n">found word for word</span></div>
+          <div>The groups had parallel trends before the pilot.</div>
+          <div class="quote">«The pre-pilot trends of the two groups are parallel»</div>
+        </div>
+        <div class="card">
+          <div class="head"><span class="chip">p. 1</span><span class="n">found word for word</span></div>
+          <div>The effect is a difference-in-differences estimate.</div>
+          <div class="quote">«The effect is estimated by difference-in-differences»</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <svg class="arrows" viewBox="0 0 1400 770">
+    <defs>
+      <marker id="head" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+        <path class="head" d="M0 0 L10 5 L0 10 z"/>
+      </marker>
+    </defs>
+    <path d="M 456 104 C 500 190, 700 230, 660 356" marker-end="url(#head)"/>
+  </svg>
+</div>
+</body>
+</html>
