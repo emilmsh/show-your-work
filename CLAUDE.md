@@ -45,6 +45,16 @@ Use Claude Code 2.1.330 or later (`claude` on the PATH may be older).
     answered page 19 for words on page 25.
   - `scripts/test/check-kinds.ps1`: PowerPoint, Excel, text and code from
     `demo/`, with words that are there and words that are not.
+  - `python scripts/test/make_hard.py <folder>` then
+    `scripts/test/check-cases.ps1 <folder>` (`-Kind excel` for one kind): 83
+    cases on files with what real ones have - grouped shapes, table rows,
+    soft line breaks; formatted numbers in every way they are written,
+    merged cells, sheet names with spaces and apostrophes; text in three
+    encodings, Markdown quoted without its marks; HTML entities, inline
+    tags, comments. A third of the cases are words that are NOT there. The
+    first run found 24 wrong answers. Add a case here for every look-up that
+    goes wrong in use.
+  - A PDF is looked up by PDF Scholar: its own `npm run test:passage`.
 
 ## Platforms: one seam, and nothing Windows-shaped outside it
 
