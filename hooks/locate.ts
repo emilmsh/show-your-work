@@ -1,11 +1,13 @@
 // Looking a source up, and showing it: the one seam where the plugin reaches
-// programs on the machine. Everything here is Windows' (scripts/show.ps1, PDF
-// Scholar's install path); see CLAUDE.md § Platforms.
+// programs on the machine. What a system decides is here and nowhere else in
+// hooks/: which script is run (scripts/show.ps1 on Windows, scripts/show.js
+// on macOS — one request, one answer) and where PDF Scholar is installed; see
+// CLAUDE.md § Platforms.
 import type { EngineInterface } from 'claude-code'
 
-import type { Source, Status } from '../types'
+import type { Source, Status, System } from '../types'
 import { calledOf } from './source'
-import { readerSession } from './state'
+import { readerSession, systemOf } from './state'
 import { words } from './words'
 
 /** What a look-up came to. `detail` is what the model is told beside the
@@ -15,24 +17,39 @@ export type Located = { status: Status; page: number; detail: string; error?: st
 
 const failure = (error: string): Located => ({ status: 'missing', page: 0, detail: '', error })
 
-/** The script beside this module, with one request: its answer is one JSON
- *  line on standard output */
+/** How a system runs its script. Each finds the script by the plugin's own
+ *  folder, which the engine names in the environment — no path is put
+ *  together here. */
+const SCRIPT: Partial<Record<System, readonly string[]>> = {
+  windows: [
+    'powershell.exe',
+    '-NoProfile',
+    '-ExecutionPolicy',
+    'Bypass',
+    '-Command',
+    "& (Join-Path $env:CLAUDE_PLUGIN_ROOT 'scripts\\show.ps1')",
+  ],
+  // JavaScript for Automation, which every Mac has
+  mac: ['/bin/sh', '-c', 'exec /usr/bin/osascript -l JavaScript "$CLAUDE_PLUGIN_ROOT/scripts/show.js"'],
+}
+
+/** The system's script, with one request: its answer is one JSON line on
+ *  standard output; undefined where the system has no script */
 async function script(
   $: EngineInterface,
   request: Record<string, unknown>,
   timeoutMs: number,
 ): Promise<Record<string, unknown> | undefined> {
-  const ran = await $.process.run(
-    [
-      'powershell.exe',
-      '-NoProfile',
-      '-ExecutionPolicy',
-      'Bypass',
-      '-Command',
-      "& (Join-Path $env:CLAUDE_PLUGIN_ROOT 'scripts\\show.ps1')",
-    ],
-    { env: { ...(await $.process.hookEnv()), SYW_REQUEST: JSON.stringify(request) }, timeoutMs },
-  )
+  const argv = SCRIPT[await systemOf($)]
+
+  if (argv === undefined) {
+    return undefined
+  }
+
+  const ran = await $.process.run(argv, {
+    env: { ...(await $.process.hookEnv()), SYW_REQUEST: JSON.stringify(request) },
+    timeoutMs,
+  })
 
   try {
     const answer: unknown = JSON.parse(ran.stdout.trim().split(/\r?\n/).pop() ?? '')
@@ -92,6 +109,52 @@ async function byScript($: EngineInterface, source: Source, isShown: boolean): P
   }
 }
 
+/** Where PDF Scholar is on this machine: its program, and the server script
+ *  it puts in its own data folder when a tool is switched on. PDF Scholar
+ *  says where its program is itself, in `command.json` beside the script
+ *  (versions after 0.88.3) — the only way to find one that was not installed to
+ *  the usual place, such as a Linux AppImage. Without that file the usual
+ *  places are tried. */
+async function pdfScholar($: EngineInterface, system: System): Promise<{ exe: string | undefined; server: string }> {
+  const home = (await $.env.get('HOME')) ?? ''
+  const local = (await $.env.get('LOCALAPPDATA')) ?? ''
+  const roaming = (await $.env.get('APPDATA')) ?? ''
+  const config = (await $.env.get('XDG_CONFIG_HOME')) ?? `${home}/.config`
+  const data =
+    system === 'windows'
+      ? `${roaming}\\PDF Scholar\\mcp\\`
+      : system === 'mac'
+        ? `${home}/Library/Application Support/PDF Scholar/mcp/`
+        : `${config}/PDF Scholar/mcp/`
+  const usual =
+    system === 'windows'
+      ? [`${local}\\Programs\\pdfx\\PDF Scholar.exe`]
+      : system === 'mac'
+        ? [
+            '/Applications/PDF Scholar.app/Contents/MacOS/PDF Scholar',
+            `${home}/Applications/PDF Scholar.app/Contents/MacOS/PDF Scholar`,
+          ]
+        : ['/opt/PDF Scholar/pdf-scholar', '/usr/bin/pdf-scholar']
+  let said: string[] = []
+
+  try {
+    const kept: unknown = JSON.parse(await $.fs.read(`${data}command.json`))
+    const command = typeof kept === 'object' && kept !== null ? (kept as { command?: unknown }).command : undefined
+
+    said = typeof command === 'string' && command !== '' ? [command] : []
+  } catch {
+    // No such file: an older PDF Scholar, or no tool switched on yet
+  }
+
+  for (const exe of [...said, ...usual]) {
+    if (await $.fs.exists(exe)) {
+      return { exe, server: `${data}pdf-scholar-mcp.cjs` }
+    }
+  }
+
+  return { exe: undefined, server: `${data}pdf-scholar-mcp.cjs` }
+}
+
 /** A PDF, through PDF Scholar. The plugin runs the reader's own server script
  *  itself, one call per process, the way an AI tool starts it — so it does
  *  not matter whether this session has PDF Scholar connected, and the server
@@ -102,18 +165,18 @@ async function byScript($: EngineInterface, source: Source, isShown: boolean): P
  *  its cards carry these numbers. PDF Scholar 0.87.0 and older read
  *  neither: there every call is a list of its own, numbered 1. */
 async function byPdfScholar($: EngineInterface, source: Source, isShown: boolean): Promise<Located> {
-  const local = await $.env.get('LOCALAPPDATA')
-  const roaming = await $.env.get('APPDATA')
-  const exe = `${local ?? ''}\\Programs\\pdfx\\PDF Scholar.exe`
-  const server = `${roaming ?? ''}\\PDF Scholar\\mcp\\pdf-scholar-mcp.cjs`
+  const system = await systemOf($)
+  const reader = await pdfScholar($, system)
 
-  if (local === undefined || roaming === undefined || !(await $.fs.exists(exe))) {
+  if (reader.exe === undefined) {
     return failure('PDF Scholar is not installed on this machine (github.com/emilmsh/pdf-scholar)')
   }
 
-  if (!(await $.fs.exists(server))) {
+  if (!(await $.fs.exists(reader.server))) {
     return failure('PDF Scholar is not sharing with AI tools: turn on a tool and «Read together» in its settings menu → AI tools')
   }
+
+  const { exe, server } = reader
 
   const session = await readerSession($)
   const rpc = [
@@ -171,8 +234,9 @@ async function byPdfScholar($: EngineInterface, source: Source, isShown: boolean
     // The reader pressed a link to get here: the window is theirs to work in
     // at once. PDF Scholar itself only comes up ABOVE the program in front,
     // without the keyboard — right when a tool shows something unasked,
-    // wrong after a press (it read as frozen until clicked).
-    if (isShown) {
+    // wrong after a press (it read as frozen until clicked). Linux has no
+    // script, and there the system decides.
+    if (isShown && system !== 'linux') {
       await script($, { kind: 'raise', process: 'PDF Scholar' }, 20_000).catch(() => undefined)
     }
 

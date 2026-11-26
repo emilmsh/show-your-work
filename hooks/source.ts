@@ -1,12 +1,18 @@
 // A source: what kind it is, what it is called, where in it the words are,
 // and how the model's call to the tool becomes one.
-import type { Kind, Source } from '../types'
+import type { Kind, Source, System } from '../types'
 import type { Words } from './words'
 
 /** The tool, as the engine names it in a call and in the transcript */
 export const TOOL = 'mcp__show-your-work__show_source'
 
 export const KINDS: readonly Kind[] = ['word', 'powerpoint', 'excel', 'pdf', 'text', 'html', 'web']
+
+/** What can be shown on a system. Windows and macOS: every kind, each by the
+ *  system's own script. Linux: PDFs alone, which PDF Scholar shows there as
+ *  everywhere — Office has no Linux, and nothing is offered half-working. */
+export const kindsOn = (system: System): readonly Kind[] =>
+  system === 'windows' || system === 'mac' ? KINDS : system === 'linux' ? ['pdf'] : []
 
 const EXTENSIONS: Record<Exclude<Kind, 'web'>, readonly string[]> = {
   word: ['docx', 'docm', 'doc', 'rtf'],

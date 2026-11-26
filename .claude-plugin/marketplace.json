@@ -6,7 +6,7 @@
     {
       "name": "show-your-work",
       "source": "./",
-      "description": "A link per cited source in Claude's answer, opening Word, Excel, PowerPoint, PDF, text, code and web sources at the cited words. Windows only for now."
+      "description": "A link per cited source in Claude's answer, opening Word, Excel, PowerPoint, PDF, text, code and web sources at the cited words. Windows and macOS; PDFs only on Linux."
     }
   ]
 }

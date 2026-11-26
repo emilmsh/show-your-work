@@ -20,11 +20,12 @@
 // hands it the press on a link. The link's address is never fetched — it only
 // says which source was pressed.
 //
-// Windows only, for now: Office is driven through COM, Notepad through UI
-// Automation, and the script beside this module (scripts/show.ps1) is
-// PowerShell. PDFs go through PDF Scholar (github.com/emilmsh/pdf-scholar),
-// whose own server script the plugin runs — so its switches decide what is
-// shared, here as everywhere.
+// Windows and macOS, each by a script of its own behind one request and one
+// answer (scripts/show.ps1: Office through COM, Notepad through UI
+// Automation; scripts/show.js: Office through Apple events). PDFs go through
+// PDF Scholar (github.com/emilmsh/pdf-scholar), whose own server script the
+// plugin runs — so its switches decide what is shared, here as everywhere —
+// and on Linux a PDF is the one kind shown (`kindsOn`).
 //
 // This module holds the hooks; the rest is beside it:
 //   words.ts   the reader's language       source.ts  a source's kind, name and place
@@ -36,9 +37,9 @@ import type { Register } from 'claude-code'
 import type { Source } from '../types'
 import { locate, show } from './locate'
 import { PANE, pane } from './pane'
-import { TOOL, askedOf, inline, nameOf, titled } from './source'
-import { isWindows, modeOf, numbered, reading, renoted, unshown } from './state'
-import { ELSEWHERE, answerOf, known, toolFor } from './tell'
+import { TOOL, askedOf, inline, kindOf, kindsOn, nameOf, titled } from './source'
+import { modeOf, numbered, reading, renoted, systemOf, unshown } from './state'
+import { ELSEWHERE, PDF_ONLY, answerOf, known, toolFor } from './tell'
 import { words } from './words'
 
 /** «[3]» in an answer — not «[3, 5]» or «[17–19]», a paper's own citations
@@ -59,12 +60,15 @@ export const register: Register = on => {
   on('session.start', async ($, e, next) => {
     const mode = await modeOf($)
 
-    // Off, or not on Windows: no tool for the model to reach for
-    if (mode === 'off' || !(await isWindows($))) {
+    const system = await systemOf($)
+
+    // Off, or on a system nothing can be shown on: no tool for the model to
+    // reach for
+    if (mode === 'off' || kindsOn(system).length === 0) {
       return next(e)
     }
 
-    await $.tool.register({ name: 'show_source', ...toolFor(mode) })
+    await $.tool.register({ name: 'show_source', ...toolFor(mode, system) })
     await $.command.register({ name: 'sources', description: words().command })
 
     return next(e)
@@ -78,10 +82,13 @@ export const register: Register = on => {
   })
 
   // Every tool call is looked at for the documents it names — a Read, a
-  // script that opens one — and nothing else of it is kept
+  // script that opens one — and nothing else of it is kept. Only documents
+  // this system can show: sources are not offered for the others.
   on('tool.call', async ($, e, next) => {
     if (e.tool !== TOOL) {
-      const named = [...JSON.stringify(e).matchAll(DOCUMENT)].map(match => nameOf(match[0].replace(/\\\\/g, '/')))
+      const found = [...JSON.stringify(e).matchAll(DOCUMENT)].map(match => nameOf(match[0].replace(/\\\\/g, '/')))
+      const shown = found.length === 0 ? [] : kindsOn(await systemOf($))
+      const named = found.filter(name => shown.includes(kindOf(name) ?? 'web'))
 
       if (named.length > 0) {
         await reading($, named)
@@ -94,7 +101,7 @@ export const register: Register = on => {
   on('ui.render', { component: 'AbovePrompt' }, async ($, e, next) => {
     const read_ = await unshown($)
 
-    if (e.props.hasSurvey || read_.length === 0 || (await modeOf($)) === 'off' || !(await isWindows($))) {
+    if (e.props.hasSurvey || read_.length === 0 || (await modeOf($)) === 'off') {
       return next(e)
     }
 
@@ -130,7 +137,9 @@ export const register: Register = on => {
   })
 
   on('tool.run', { tool: 'mcp__show-your-work__show_source' }, async ($, e) => {
-    if (!(await isWindows($))) {
+    const shown = kindsOn(await systemOf($))
+
+    if (shown.length === 0) {
       return { deny: ELSEWHERE }
     }
 
@@ -145,6 +154,10 @@ export const register: Register = on => {
       return {
         deny: 'Give `source` (a Word, PowerPoint, Excel, PDF, HTML, text or code file by absolute path, or an https URL) and `quote`.',
       }
+    }
+
+    if (!shown.includes(asked.kind)) {
+      return { deny: PDF_ONLY }
     }
 
     if (asked.kind === 'excel' && typeof input.cell !== 'string') {

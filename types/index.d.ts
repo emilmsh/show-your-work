@@ -32,6 +32,9 @@ export type View = {
   group: 'none' | 'file' | 'kind'
 }
 
+/** The system the plugin runs on; 'other' is one it can show nothing on */
+export type System = 'windows' | 'mac' | 'linux' | 'other'
+
 /** How eagerly Claude cites: by itself, only when asked, or not at all */
 export type Mode = 'always' | 'asked' | 'off'
 

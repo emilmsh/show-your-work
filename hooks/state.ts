@@ -4,7 +4,7 @@
 import { atom, read, update } from 'claude-code'
 import type { EngineInterface } from 'claude-code'
 
-import type { Mode, Source, View } from '../types'
+import type { Mode, Source, System, View } from '../types'
 
 // Change a tag when a value's fields change: it declines what an earlier
 // version stored, which outlives a reload.
@@ -102,15 +102,18 @@ export async function modeOf($: EngineInterface): Promise<Mode> {
   }
 }
 
-/** Everything this plugin does to a program is Windows' (scripts/show.ps1,
- *  PDF Scholar's install path). On another system it offers NOTHING — no tool
- *  for the model to call and be let down by — until that system has a way of
- *  its own. A machine that cannot be asked is taken for Windows: the script
- *  then says what went wrong by itself. */
-export async function isWindows($: EngineInterface): Promise<boolean> {
+/** The system the plugin runs on. What it does to a program is the system's
+ *  own (scripts/show.ps1 on Windows, scripts/show.js on macOS), and what it
+ *  can show differs with it: `kindsOn` in source.ts. On any other system it
+ *  offers NOTHING — no tool for the model to call and be let down by. A
+ *  machine that cannot be asked is taken for Windows: the script then says
+ *  what went wrong by itself. */
+export async function systemOf($: EngineInterface): Promise<System> {
   try {
-    return (await $.session.machine()).sysname === 'Windows_NT'
+    const { sysname } = await $.session.machine()
+
+    return sysname === 'Windows_NT' ? 'windows' : sysname === 'Darwin' ? 'mac' : sysname === 'Linux' ? 'linux' : 'other'
   } catch {
-    return true
+    return 'windows'
   }
 }

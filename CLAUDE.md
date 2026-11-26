@@ -20,6 +20,7 @@ shows the PDFs. Its checkout is beside this one.
   showing it — the Windows seam), `tell.ts` (what the model is told, and
   reading it back out of the transcript), `pane.tsx` (the Sources pane).
 - `scripts/show.ps1` — everything that touches a program on Windows.
+  `scripts/show.js` — the same on macOS, behind the same request and answer.
 - `types/index.d.ts` — the contract for what the plugin keeps in session
   state. Change a value's fields and you change its `shape` tag too.
 - `hooks/register.test.tsx` — the tests. They start no program.
@@ -55,36 +56,59 @@ Use Claude Code 2.1.330 or later (`claude` on the PATH may be older).
     first run found 24 wrong answers. Add a case here for every look-up that
     goes wrong in use.
   - A PDF is looked up by PDF Scholar: its own `npm run test:passage`.
+- The Mac's look-up (`scripts/show.js`), as far as it goes without a Mac:
+  `node scripts/test/check-cases.mjs <folder> [word.docx]` runs the same
+  `cases.json` (text, HTML, PowerPoint) and the Word fixture's passages
+  through the half of the script that reads files. Excel, Word's page and
+  everything shown need a Mac: `sh scripts/test/check-mac.sh [show]`.
 
-## Platforms: one seam, and nothing Windows-shaped outside it
+## Platforms: one seam, and nothing system-shaped outside it
 
-The plugin is **Windows only for now**, and that is said wherever it is
-offered (README, plugin description, PDF Scholar's documents).
+**Windows is the reference.** macOS is held to it kind for kind; Linux shows
+PDFs only. What each system shows, and where it differs, is the table in the
+README (§ Which systems): a difference that is not in that table is a bug.
+The macOS script was written on Windows (2026-11-26) and is **not released
+until it has run on a Mac** (`docs/MAC-TEST.md`); the branch is `mac-linux`.
 
-What is Windows' own lives in exactly two places:
+What a system decides lives in exactly three places:
 
-1. `scripts/show.ps1` — Office through COM, Notepad through UI Automation,
-   VS Code and the browser by their programs, window raising through Win32.
-2. `byPdfScholar` in `hooks/locate.ts` — PDF Scholar's install path
-   (`%LOCALAPPDATA%\Programs\pdfx`) and its data folder.
+1. `scripts/show.ps1` (Windows) — Office through COM, Notepad through UI
+   Automation, VS Code and the browser by their programs, window raising
+   through Win32.
+2. `scripts/show.js` (macOS, run by `osascript -l JavaScript`) — Word, Excel
+   and PowerPoint through Apple events, VS Code by its `vscode://` address,
+   the browser through `open location`. A Word or PowerPoint quote is looked
+   up in the FILE (a zip of XML); the program is asked only for the page and
+   to select. Its upper half touches no program and runs under Node too.
+3. `hooks/locate.ts` — which script a system runs (`SCRIPT`) and where PDF
+   Scholar is (`pdfScholar`: `command.json` beside its server script first,
+   then the usual install places).
 
-Everything else in `hooks/` — the tool's contract, the numbering, the
-kinds, the labels, the link in the answer, the pane, the state — must stay
-free of anything a system decides. The rules that keep it so:
+Which kinds a system shows is `kindsOn` in `hooks/source.ts`, and the system
+itself `systemOf` in `hooks/state.ts`. Everything else in `hooks/` — the
+tool's contract, the numbering, the labels, the link in the answer, the pane,
+the state — must stay free of anything a system decides. The rules:
 
-- **A new source kind is a contract first, a Windows way second.** Add the
-  kind, its label and its answer in `source.ts`, `words.ts`, `tell.ts` and the tests, and only
-  then the way to look it up and show it in `show.ps1`. If the look-up could
-  be done without a program (reading a text file), do it without one.
+- **A new source kind is a contract first, a system's way second.** Add the
+  kind, its label and its answer in `source.ts`, `words.ts`, `tell.ts` and the
+  tests, and only then the way to look it up and show it — in BOTH scripts, in
+  the same change. If the look-up could be done without a program (reading a
+  text file), do it without one.
 - **The script's request and answer are the seam.** `{ kind, path, quote,
-  cell, show }` in, one JSON line `{ found, page, … }` or `{ error }` out.
-  Another system gets its own script behind the same request and answer; it
-  never gets a branch inside the Windows script.
+  cell, show }` in, one JSON line `{ found, page, … }` or `{ error }` out,
+  the same fields on every system. A system gets its own script behind it;
+  it never gets a branch inside another's.
+- **A rule for judging a quote is changed in both scripts at once**: the
+  pattern (`Pattern` / `pattern`), the readings of a number (`Number` /
+  `readings`), the Markdown and HTML reading. `check-cases.ps1` and
+  `check-cases.mjs` run the SAME `cases.json` against each, so a rule that
+  moved in one alone fails there.
 - **No path is split, joined or guessed in `hooks/`** beyond taking a
-  file's name for a label. A path is the model's, passed through.
-- **On another system the plugin offers nothing** (`isWindows`): no tool, so
-  the model is never let down by one. Keep that until the system has a way of
-  its own; never ship a half-working one.
+  file's name for a label, and PDF Scholar's own folders in `pdfScholar`. A
+  path is the model's, passed through.
+- **On a system with no way of its own the plugin offers nothing**
+  (`kindsOn` is empty): no tool, so the model is never let down by one. On
+  Linux the tool is worded for PDFs alone. Never ship a half-working kind.
 - **PDF Scholar must work the same without this plugin.** Nothing in PDF
   Scholar may depend on it, and what the plugin asks of PDF Scholar goes
   through its public MCP tools — the same on every system PDF Scholar runs on.
@@ -111,6 +135,10 @@ themselves.
 - `scripts/show.ps1` must be plain ASCII: Windows PowerShell reads a script
   without a byte-order mark as ANSI. A no-break space in a pattern is written
   ` `.
+- `scripts/show.js` is kept ASCII too. A tool that writes a file can turn an
+  escaped character in a pattern into the character itself without saying so
+  (2026-11-26: every no-break space and byte-order mark in the new script):
+  search the file for anything outside ASCII after writing it.
 - The script answers with ONE line on standard output. A method that returns
   a value (`Select()`, `Activate()`) must be cast to `[void]`, or its `True`
   becomes part of the answer.

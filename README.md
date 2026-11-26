@@ -20,7 +20,8 @@ file opens in its own program, at the cited words.
 
 ## Install
 
-You need Windows and Claude Code. In a Claude Code session, type:
+You need Claude Code on Windows or macOS (on Linux, PDFs only: see
+[Which systems](#which-systems)). In a Claude Code session, type:
 
 ```
 /plugin install show-your-work --marketplace emilmsh/show-your-work
@@ -40,9 +41,6 @@ when it has; `/reload-plugins` applies it at once, or it takes effect in your
 next session. To update by hand instead: `/plugin`, **Installed**,
 **Update now**.
 
-**Windows only, for now.** It drives Word, Excel and PowerPoint through their
-own automation, which this version does only on Windows. On another system the
-plugin installs but offers nothing.
 
 ## Try it
 
@@ -129,6 +127,9 @@ got something from. That is the whole idea.
 | HTML files | The words, scrolled to and marked by your default browser | A text-fragment link |
 | Web pages (`https://…`) | The same. **The page is never fetched, so the words are never checked**: the pane says *not checked* | A text-fragment link |
 
+The table is Windows'. [Which systems](#which-systems) says what differs on
+macOS and Linux.
+
 A PDF opens in [PDF Scholar](https://github.com/emilmsh/pdf-scholar), which
 marks the words on the page and keeps its own list of what Claude has pointed
 at:
@@ -139,12 +140,39 @@ at:
 
 <p align="center"><sub>An illustration, like the ones above.</sub></p>
 
+## Which systems
+
+The same tool, the same links and the same pane everywhere. What differs is
+what each system lets a program be asked to do.
+
+| | Windows | macOS | Linux |
+| --- | --- | --- | --- |
+| Word | Page, words selected | Page, words selected | Not shown |
+| Excel | Cell, row, column, block or sheet | The same | Not shown |
+| PowerPoint | Slide, words selected | Slide. The words are not selected | Not shown |
+| PDF (PDF Scholar) | Page, words marked | The same | The same |
+| Text | Line, words selected, in Notepad | Line and column in VS Code; without it the file opens in the default text editor, with no place | Not shown |
+| Code | Line and column, in VS Code | The same | Not shown |
+| HTML and web | Words marked by the browser | The same | Not shown |
+
+- **macOS.** Word, Excel and PowerPoint are driven through Apple events, so
+  the first citation of each kind asks whether Claude Code (or your terminal)
+  may control that program. A Word or PowerPoint quote is looked up in the
+  file itself, as it was last saved; Word is asked only for the page. A
+  `.ppt` file from before 2007 cannot be read: save it as `.pptx`.
+- **Linux.** Office has no Linux, so the plugin cites PDFs and nothing else,
+  and Claude is told so. PDF Scholar is found where a `.deb` puts it; an
+  AppImage is found once a PDF Scholar later than 0.88.3 has been started with
+  a tool switched on.
+- **Anywhere else** the plugin installs but offers nothing.
+
 ## What you need
 
-- Windows 10 or 11, and Claude Code 2.1.330 or later, in the terminal or in
-  the Code tab of the desktop app.
+- Claude Code 2.1.330 or later, in the terminal or in the Code tab of the
+  desktop app, on Windows 10 or 11 or on macOS.
 - The programs for the sources you use: Office for Word, Excel and PowerPoint
-  files, VS Code for code files (without it they open in Notepad).
+  files, VS Code for code files (without it they open in Notepad on Windows
+  and in the default text editor on a Mac).
 - For PDFs, the PDF Scholar desktop app with Claude turned on under **AI
   tools** in its settings menu, and **Read together** turned on in the same
   dialog. PDF Scholar's switches decide what is shared, here as everywhere: a
@@ -155,8 +183,10 @@ at:
 - **It reads the files Claude cites**, on your machine, to look the quoted
   words up. Nothing it reads is sent anywhere by the plugin. What Claude itself
   has read of a file is a matter between you and Claude, as always.
-- **It runs a PowerShell script** that ships with it,
-  [`scripts/show.ps1`](scripts/show.ps1), and through it the programs above.
+- **It runs a script** that ships with it, and through it the programs above:
+  [`scripts/show.ps1`](scripts/show.ps1) in PowerShell on Windows,
+  [`scripts/show.js`](scripts/show.js) through `osascript` on a Mac. On Linux
+  it runs no script.
   To check a quote in a Word or PowerPoint file that is not open, the file is
   opened invisibly and read-only, and closed again.
 - **It never fetches a web page.** A web source is only opened in your browser
@@ -195,12 +225,13 @@ claude plugin test .
 The tests ([`hooks/register.test.tsx`](hooks/register.test.tsx)) start no
 program: they stand in for the script and for PDF Scholar's server, and check
 the numbering, the answers Claude is given, the links and the pane. What the
-script does to real programs is checked by hand, on a Windows machine with
-Office, VS Code and PDF Scholar: cite a passage in a file of each kind and
-press the link, once with the file open and once with the program closed.
+script does to real programs is checked by hand, on a machine with Office,
+VS Code and PDF Scholar: cite a passage in a file of each kind and press the
+link, once with the file open and once with the program closed. On a Mac,
+[`docs/MAC-TEST.md`](docs/MAC-TEST.md) says how.
 
-The script must stay plain ASCII. Windows PowerShell reads a script without a
-byte-order mark as ANSI, so a character outside ASCII in a pattern changes
+Both scripts must stay plain ASCII. Windows PowerShell reads a script without
+a byte-order mark as ANSI, so a character outside ASCII in a pattern changes
 what the pattern matches.
 
 Built by Emil Mathias Strøm Halseth, who reads PDFs for a living, with

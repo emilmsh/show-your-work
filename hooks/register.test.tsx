@@ -72,8 +72,28 @@ function machine(
   on('ui.open', () => ({ value: { isPlaced: true } }))
   on('ui.toast', () => ({ value: undefined }))
   on('process.hookEnv', () => ({ value: { CLAUDE_PLUGIN_ROOT: 'C:\\plugins\\show-your-work' } }))
-  on('env.get', (_, e) => ({ value: `C:\\Users\\reader\\${e.name}` }))
-  on('fs.exists', () => ({ value: true }))
+  // What each system's environment holds, and no more
+  on('env.get', (_, e) => ({
+    value:
+      sysname === 'Windows_NT'
+        ? e.name === 'LOCALAPPDATA' || e.name === 'APPDATA'
+          ? `C:\\Users\\reader\\${e.name}`
+          : undefined
+        : e.name === 'HOME'
+          ? sysname === 'Darwin'
+            ? '/Users/reader'
+            : '/home/reader'
+          : undefined,
+  }))
+  // On Linux PDF Scholar is an AppImage somewhere, and says where itself
+  on('fs.read', (_, e) => {
+    if (sysname === 'Linux' && String(e.path).endsWith('command.json')) {
+      return { value: JSON.stringify({ command: '/home/reader/Apps/PDF-Scholar.AppImage' }) as never }
+    }
+
+    throw new Error('no such file')
+  })
+  on('fs.exists', (_, e) => ({ value: !String(e.path).startsWith('/opt/') && !String(e.path).startsWith('/usr/') }))
   on('process.run', (_, e) => {
     const env = e.init?.env ?? {}
     const request = JSON.parse(env.SYW_REQUEST ?? '{}') as Record<string, unknown>
@@ -81,7 +101,7 @@ function machine(
 
     runs.push({ argv: e.argv, request, stdin })
 
-    if (e.argv[0] !== 'powershell.exe') {
+    if (e.argv[0] !== 'powershell.exe' && e.argv[0] !== '/bin/sh') {
       const call = stdin
         .split('\n')
         .filter(line => line !== '')
@@ -345,8 +365,8 @@ test('a PDF goes to PDF Scholar: one session, and this plugin’s own numbers', 
   expect(call(reader[1] as Run).arguments.number).toBe(3)
 })
 
-test('on a system that is not Windows the plugin offers nothing and starts nothing', async ($, on) => {
-  const runs = machine(on, undefined, 'Darwin')
+test('on a system it has no way on, the plugin offers nothing and starts nothing', async ($, on) => {
+  const runs = machine(on, undefined, 'FreeBSD')
 
   registered.length = 0
   await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
@@ -354,8 +374,84 @@ test('on a system that is not Windows the plugin offers nothing and starts nothi
   // No tool for the model to call and be let down by
   expect(registered).toEqual([])
   // …and one that is called all the same says why, and touches no program
-  expect(await cite($, { source: REPORT, quote: 'words' })).toMatch(/^DENIED: Show your work runs on Windows only for now/)
+  expect(await cite($, { source: REPORT, quote: 'words' })).toMatch(/^DENIED: Show your work runs on Windows and macOS/)
   expect(runs.length).toBe(0)
+})
+
+test('on a Mac the same request goes to the Mac’s script, and PDF Scholar is found where a Mac has it', async ($, on) => {
+  const runs = machine(on, () => ({ found: true, page: 4 }), 'Darwin')
+
+  registered.length = 0
+  described.length = 0
+  await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
+  expect(registered).toEqual(['show_source'])
+  // Every kind, as on Windows
+  expect(described[0]).toMatch(/a Word, PowerPoint or Excel file, a PDF/)
+
+  expect(await cite($, { source: '/Users/reader/work/report.docx', quote: 'The main finding holds' })).toBe(
+    '[1] Found word for word, p. 4 of report.docx.',
+  )
+  // The request is the one Windows' script gets: only the program that reads it differs
+  expect(runs[0]?.argv).toEqual([
+    '/bin/sh',
+    '-c',
+    'exec /usr/bin/osascript -l JavaScript "$CLAUDE_PLUGIN_ROOT/scripts/show.js"',
+  ])
+  expect(runs[0]?.request).toEqual({
+    kind: 'word',
+    path: '/Users/reader/work/report.docx',
+    quote: 'The main finding holds',
+    cell: '',
+    show: false,
+  })
+
+  expect(await cite($, { source: '/Users/reader/work/paper.pdf', page: 6, quote: 'sine and cosine' })).toBe(
+    '[2] Found word for word, p. 6 of paper.pdf.',
+  )
+  expect(runs[1]?.argv.slice(0, 4)).toEqual([
+    '/Applications/PDF Scholar.app/Contents/MacOS/PDF Scholar',
+    '/Users/reader/Library/Application Support/PDF Scholar/mcp/pdf-scholar-mcp.cjs',
+    '--client',
+    'claude',
+  ])
+})
+
+test('on Linux a PDF is the one kind shown, by the program PDF Scholar names itself', async ($, on) => {
+  const runs = machine(on, undefined, 'Linux')
+
+  on('tool.call', () => ({ result: 'ok' }))
+  registered.length = 0
+  described.length = 0
+  await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
+  expect(registered).toEqual(['show_source'])
+  // The model is offered PDFs, and nothing it would be refused
+  expect(described[0]).toMatch(/what a PDF says/)
+  expect(described[0]).not.toMatch(/Excel/)
+
+  expect(await cite($, { source: '/home/reader/work/report.docx', quote: 'words' })).toMatch(
+    /^DENIED: On Linux Show your work shows PDFs only/,
+  )
+  expect(runs.length).toBe(0)
+
+  expect(await cite($, { source: '/home/reader/work/paper.pdf', page: 6, quote: 'sine and cosine', show: true })).toBe(
+    '[1] Found word for word, p. 6 of paper.pdf.',
+  )
+  // An AppImage is wherever the reader put it: PDF Scholar says where, in
+  // command.json beside its server script. Nothing else is run - Linux has
+  // no script, so no window is raised by one.
+  expect(runs.map(run => run.argv.slice(0, 2))).toEqual([
+    ['/home/reader/Apps/PDF-Scholar.AppImage', '/home/reader/.config/PDF Scholar/mcp/pdf-scholar-mcp.cjs'],
+  ])
+
+  // A Word file that a turn reads is not offered sources for; a PDF is
+  await $.tool.call({ tool: 'Read', file_path: '/home/reader/work/report.docx' } as never)
+  await $.tool.call({ tool: 'Read', file_path: '/home/reader/work/paper.pdf' } as never)
+
+  const ui = await $.ui.mount({ ...BAND, surface: 'desktop' })
+
+  expect((await ui.find({ type: 'Text', text: /paper\.pdf/ }))?.text).toMatch(/paper\.pdf/)
+  expect(await ui.find({ type: 'Text', text: /report\.docx/ })).toBe(undefined)
+  await ui.unmount()
 })
 
 const BAND = {

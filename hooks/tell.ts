@@ -2,7 +2,7 @@
 // call came to — and reading those answers back out of the transcript.
 import type { EngineInterface } from 'claude-code'
 
-import type { Mode, Source, Status } from '../types'
+import type { Mode, Source, Status, System } from '../types'
 import type { Located } from './locate'
 import { TOOL, askedOf, calledOf, placeOf } from './source'
 import { noted } from './state'
@@ -36,11 +36,23 @@ const WHEN: Record<Exclude<Mode, 'off'>, string> = {
 const DESCRIPTION =
   'Cite a passage in a source the user can open: a Word, PowerPoint or Excel file, a PDF, a plain text file (.md, .txt, .log, .tex), a code file (.R, .py, .do, .sql, .ts …), an HTML file — each by absolute path — or a web page (https URL). The words are looked up in the file itself, and the answer opens with the citation’s number, «[3] …». Write that number, as [3], right after the claim it backs and nowhere else: the user never sees the number — where you wrote it they see a link reading the place («p. 7», «line 19»), which opens the source at the words. Quote word for word. For Excel give `cell` — a cell («Sheet!B2»), a row, column or block («Sheet!5:5», «Sheet!C:C», «Sheet!B2:D10») or a sheet alone («Sheet!») — and, as `quote`, the value you say is there (for a sheet alone, its name). Set `show` only when the user asks to see the passage now. A NOT FOUND answer means the claim is unverified: say so, or quote the source’s own words.'
 
-/** The tool as the model sees it, worded by the reader's mode (its name stays
- *  at the call, where `claude plugin validate` reads it) */
-export const toolFor = (mode: Exclude<Mode, 'off'>) => ({
+/** The same two texts on Linux, where a PDF is the one kind that can be
+ *  shown (`kindsOn`): the model is not offered what it would be refused */
+const WHEN_PDF: Record<Exclude<Mode, 'off'>, string> = {
+  always:
+    'USE THIS WHENEVER you tell the user what a PDF says. The user installed «Show your work» to check your claims against the source in one press, so back the claims that matter — figures, findings, dates, anything you quote — with one call each, several in parallel, before you answer. Do not cite every sentence, and do not cite a file you only skimmed for context. ',
+  asked: WHEN.asked,
+}
+
+const DESCRIPTION_PDF =
+  'Cite a passage in a PDF the user can open, by absolute path and page. On this system (Linux) a PDF is the only kind of source that can be cited this way: cite any other in plain text. The words are looked up in the file itself, and the answer opens with the citation’s number, «[3] …». Write that number, as [3], right after the claim it backs and nowhere else: the user never sees the number — where you wrote it they see a link reading the place («p. 7»), which opens the PDF at the words. Quote word for word. Set `show` only when the user asks to see the passage now. A NOT FOUND answer means the claim is unverified: say so, or quote the source’s own words.'
+
+/** The tool as the model sees it, worded by the reader's mode and by what the
+ *  system can show (its name stays at the call, where `claude plugin
+ *  validate` reads it) */
+export const toolFor = (mode: Exclude<Mode, 'off'>, system: System = 'windows') => ({
   isDeferred: false,
-  description: `${WHEN[mode]}${DESCRIPTION}`,
+  description: system === 'linux' ? `${WHEN_PDF[mode]}${DESCRIPTION_PDF}` : `${WHEN[mode]}${DESCRIPTION}`,
   inputSchema: {
     type: 'object' as const,
     properties: {
@@ -58,7 +70,11 @@ export const toolFor = (mode: Exclude<Mode, 'off'>) => ({
   },
 })
 
-export const ELSEWHERE = 'Show your work runs on Windows only for now, so it cannot check or open a source on this machine.'
+export const ELSEWHERE =
+  'Show your work runs on Windows and macOS, and for PDFs on Linux: it cannot check or open a source on this machine.'
+
+export const PDF_ONLY =
+  'On Linux Show your work shows PDFs only. Cite this source in plain text, and say that it has no link.'
 
 // ---------- What a call came to ----------
 //

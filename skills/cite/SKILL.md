@@ -1,6 +1,6 @@
 ---
 name: cite
-description: Show where each claim comes from, as links that open the source at the cited words. Use when the user asks where something is said, asks for sources or citations, asks you to show your work or back up an answer, or says "vis kildene", "hvor står det", "show me where it says that", "cite your sources". Covers Word, PowerPoint and Excel files, PDFs, text and code files, HTML files and web pages. Windows only.
+description: Show where each claim comes from, as links that open the source at the cited words. Use when the user asks where something is said, asks for sources or citations, asks you to show your work or back up an answer, or says "vis kildene", "hvor står det", "show me where it says that", "cite your sources". Covers Word, PowerPoint and Excel files, PDFs, text and code files, HTML files and web pages, on Windows and macOS; PDFs only on Linux.
 ---
 
 # Cite with Show your work
@@ -39,6 +39,7 @@ that open each source at the exact words.
 ## If the tool is not there
 
 The plugin offers nothing when the user has set **Cite** to **Off** in the
-Sources pane, and on systems other than Windows. Then cite in plain text —
+Sources pane, and on a system it has no way on (it runs on Windows and macOS,
+and for PDFs on Linux). Then cite in plain text —
 file, page or cell, and the quoted words — and tell the user that the links
 are off and that `/sources` opens the pane where they are turned on.
