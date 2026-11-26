@@ -197,16 +197,30 @@ function Show-PowerPoint {
   $pattern = Pattern $req.quote
   $hit = $null
   foreach ($s in $pres.Slides) {
-    $ranges = @()
-    foreach ($sh in $s.Shapes) {
-      if ($sh.HasTextFrame -and $sh.TextFrame.HasText) { $ranges += , @('slide', $sh.TextFrame.TextRange) }
-      if ($sh.HasTable) { foreach ($row in $sh.Table.Rows) { foreach ($cell in $row.Cells) { $ranges += , @('slide', $cell.Shape.TextFrame.TextRange) } } }
+    # Every text of the slide: { where, its range (none for a table row read
+    # as one line), its text }. A group's shapes are reached through the
+    # group, however deep; a table's cells one by one, and each ROW once more
+    # as a line, since a row is what is quoted from a table.
+    $ranges = New-Object Collections.ArrayList
+    $queue = New-Object Collections.Queue
+    foreach ($sh in $s.Shapes) { $queue.Enqueue($sh) }
+    while ($queue.Count -gt 0) {
+      $sh = $queue.Dequeue()
+      if ($sh.Type -eq 6) { foreach ($in in $sh.GroupItems) { $queue.Enqueue($in) }; continue }
+      if ($sh.HasTextFrame -and $sh.TextFrame.HasText) { [void]$ranges.Add(@('slide', $sh.TextFrame.TextRange, $sh.TextFrame.TextRange.Text)) }
+      if ($sh.HasTable) {
+        foreach ($row in $sh.Table.Rows) {
+          $line = @()
+          foreach ($cell in $row.Cells) { $tr = $cell.Shape.TextFrame.TextRange; $line += $tr.Text; [void]$ranges.Add(@('slide', $tr, $tr.Text)) }
+          [void]$ranges.Add(@('slide', $null, ($line -join "`t")))
+        }
+      }
     }
     foreach ($sh in $s.NotesPage.Shapes) {
-      if ($sh.HasTextFrame -and $sh.TextFrame.HasText -and $sh.PlaceholderFormat.Type -eq 2) { $ranges += , @('notes', $sh.TextFrame.TextRange) }
+      if ($sh.HasTextFrame -and $sh.TextFrame.HasText -and $sh.PlaceholderFormat.Type -eq 2) { [void]$ranges.Add(@('notes', $sh.TextFrame.TextRange, $sh.TextFrame.TextRange.Text)) }
     }
     foreach ($r in $ranges) {
-      $mt = [regex]::Match($r[1].Text, $pattern)
+      $mt = [regex]::Match([string]$r[2], $pattern)
       if ($mt.Success) { $hit = @{ slide = $s.SlideIndex; where = $r[0]; range = $r[1]; m = $mt }; break }
     }
     if ($hit) { break }
@@ -218,7 +232,7 @@ function Show-PowerPoint {
       # Open without a window (a check that was never closed): give it one
       if ($pres.Windows.Count -eq 0) { [void]$pres.NewWindow() }
       $win = $pres.Windows.Item(1); $win.Activate(); $win.View.GotoSlide($hit.slide)
-      if ($hit.where -eq 'slide') { try { $hit.range.Characters($hit.m.Index + 1, $hit.m.Length).Select() } catch { $res.selectError = $true } }
+      if ($hit.where -eq 'slide' -and $hit.range) { try { $hit.range.Characters($hit.m.Index + 1, $hit.m.Length).Select() } catch { $res.selectError = $true } }
     }
   }
   if ($show) { $res.raised = Raise $null 'POWERPNT' }
@@ -226,11 +240,31 @@ function Show-PowerPoint {
   $res
 }
 
+# A number as somebody wrote it, in every way it can be read: "1 987",
+# "1,987" and "1.987" are all 1987 to someone, and the last two are also
+# 1.987. Each reading is { value, decimals, percent }; none when the text is
+# no number. A typeset minus is a minus.
 function Number([string]$t) {
-  $c = ($t -replace '[\s\u00a0\u202f]', '') -replace '%$', ''
-  if ($c -notmatch '^-?\d+([.,]\d+)?$') { return $null }
-  $dec = 0; if ($c -match '[.,](\d+)$') { $dec = $Matches[1].Length }
-  @{ value = [double]::Parse(($c -replace ',', '.'), [Globalization.CultureInfo]::InvariantCulture); decimals = $dec; percent = $t.Trim().EndsWith('%') }
+  $c = (($t -replace '[\s\u00a0\u202f]', '') -replace '\u2212', '-') -replace '%$', ''
+  $percent = $t.Trim().EndsWith('%')
+  $inv = [Globalization.CultureInfo]::InvariantCulture
+  $read = @()
+  # Groups of three: no decimals, or decimals after the OTHER separator
+  if ($c -match '^(-?\d{1,3})((?:[.,]\d{3})+)$' -or $c -match '^(-?\d{1,3})((?:\.\d{3})+),(\d+)$' -or $c -match '^(-?\d{1,3})((?:,\d{3})+)\.(\d+)$') {
+    $head = $Matches[1]; $groups = $Matches[2]; $dec = ''; if ($Matches[3]) { $dec = $Matches[3] }
+    # One separator between the groups, not both
+    if (-not ($groups.Contains('.') -and $groups.Contains(','))) {
+      $whole = $head + ($groups -replace '[.,]', '')
+      $text = $whole; if ($dec -ne '') { $text = "$whole.$dec" }
+      $read += @{ value = [double]::Parse($text, $inv); decimals = $dec.Length; percent = $percent }
+    }
+  }
+  # One separator at most: the decimal sign
+  if ($c -match '^-?\d+([.,](\d+))?$') {
+    $dec = 0; if ($Matches[2]) { $dec = $Matches[2].Length }
+    $read += @{ value = [double]::Parse(($c -replace ',', '.'), $inv); decimals = $dec; percent = $percent }
+  }
+  , $read
 }
 function Show-Excel {
   # Excel runs as several instances, and one of them can be an invisible one
@@ -260,25 +294,36 @@ function Show-Excel {
   # the citation when ONE of its cells does; a sheet alone only has to exist.
   $at = $req.cell.LastIndexOf('!')
   $claim = Number $req.quote
-  $norm = { param($t) ($t -replace '[\s\u00a0\u202f]', '') }
+  $norm = { param($t) (($t -replace '[\s\u00a0\u202f]', '') -replace '\u2212', '-') }
+  # A cell holds the value cited when it SHOWS it (as text, blanks aside), or
+  # when its number is the number cited, in one of the ways that can be read,
+  # to as many decimals as were cited. A cell of a merged block is the block.
   $same = {
     param($c)
-    if ($claim -and ($c.Value2 -is [double])) {
-      $v = $c.Value2; if ($claim.percent) { $v = $v * 100 }
-      return [math]::Abs($v - $claim.value) -lt (0.5 * [math]::Pow(10, -$claim.decimals) + 1e-9)
+    if ($c.MergeCells) { $c = $c.MergeArea.Cells.Item(1, 1) }
+    if ((& $norm ([string]$c.Text)) -eq (& $norm ([string]$req.quote))) { return $true }
+    if ($c.Value2 -is [double]) {
+      foreach ($one in $claim) {
+        $v = $c.Value2; if ($one.percent) { $v = $v * 100 }
+        if ([math]::Abs($v - $one.value) -lt (0.5 * [math]::Pow(10, -$one.decimals) + 1e-9)) { return $true }
+      }
     }
-    (& $norm ([string]$c.Text)) -eq (& $norm ([string]$req.quote))
+    $false
   }
+  # A sheet's name as Excel writes it in a formula: in quotation marks when it
+  # has a space, and an apostrophe of its own doubled
+  $sheetOf = { param([string]$n) $n = $n.Trim(); if ($n -match "^'(.*)'$") { $Matches[1] -replace "''", "'" } else { $n } }
   try {
     $addr = $req.cell.Substring($at + 1).Trim()
-    if ($at -gt 0) { $ws = $wb.Worksheets.Item($req.cell.Substring(0, $at).Trim("'")) }
-    else { try { $ws = $wb.Worksheets.Item($req.cell.Trim("'")); $addr = '' } catch { $ws = $wb.Worksheets.Item(1) } }
+    if ($at -gt 0) { $ws = $wb.Worksheets.Item((& $sheetOf $req.cell.Substring(0, $at))) }
+    else { try { $ws = $wb.Worksheets.Item((& $sheetOf $req.cell)); $addr = '' } catch { $ws = $wb.Worksheets.Item(1) } }
     $res.sheet = $ws.Name
     $rng = $null
     if ($addr -eq '') { $res.found = $true; $res.whole = 'sheet' }
     else {
       $rng = $ws.Range($addr)
       if ($rng.Cells.CountLarge -eq 1) {
+        if ($rng.MergeCells) { $rng = $rng.MergeArea.Cells.Item(1, 1) }
         $res.text = [string]$rng.Text
         $res.formula = [string]$rng.Formula
         $res.found = [bool](& $same $rng)
@@ -313,14 +358,37 @@ function Show-Excel {
   $res
 }
 
+# A text file's text, whatever it is written in: by its mark when it has one
+# (UTF-8, UTF-16), else as UTF-8 when it IS that, else in the machine's own
+# code page - which is what a file with a Norwegian letter in it is when it
+# is not UTF-8 (read as UTF-8 regardless, those letters come out as nothing
+# and no quote with one is ever found).
+function ReadText([string]$path) {
+  $bytes = [IO.File]::ReadAllBytes($path)
+  $marked = ($bytes.Length -ge 3 -and $bytes[0] -eq 0xEF -and $bytes[1] -eq 0xBB -and $bytes[2] -eq 0xBF) -or
+    ($bytes.Length -ge 2 -and (($bytes[0] -eq 0xFF -and $bytes[1] -eq 0xFE) -or ($bytes[0] -eq 0xFE -and $bytes[1] -eq 0xFF)))
+  if ($marked) { return [IO.File]::ReadAllText($path) }
+  try { (New-Object Text.UTF8Encoding($false, $true)).GetString($bytes) }
+  catch { [Text.Encoding]::Default.GetString($bytes) }
+}
+
 # A plain text file (Markdown, a note, a log): the words are looked up in the
 # file itself and the place is a LINE. Shown in Notepad, which takes no
 # "go to" on its command line: its text is reached through UI Automation,
 # the way a screen reader reaches it, and the words selected there.
 function Show-Text {
-  $text = [IO.File]::ReadAllText($req.path)
+  $text = ReadText $req.path
   $pattern = Pattern $req.quote
   $mt = [regex]::Match($text, $pattern)
+  if (-not $mt.Success -and @('.md', '.markdown', '.qmd', '.rmd') -contains [IO.Path]::GetExtension($req.path).ToLower()) {
+    # Markdown is quoted as it READS: without the marks for bold, italics and
+    # code, and a link by its words. Tried only when the words as written are
+    # not there. Nothing is taken out but inside a line, so the line holds.
+    $plain = [regex]::Replace($text, '!?\[([^\]\r\n]*)\]\([^)\r\n]*\)', '$1')
+    $plain = [regex]::Replace($plain, '\*+(?=\S)|(?<=\S)\*+|`+|(?<![\w\\])_+(?=\S)|(?<=\S)_+(?!\w)', '')
+    $again = [regex]::Match($plain, $pattern)
+    if ($again.Success) { $mt = $again; $text = $plain }
+  }
   $res = @{ found = $mt.Success }
   if ($mt.Success) { $res.page = ($text.Substring(0, $mt.Index) -split "`n").Count }
   if (-not $show) { return $res }
@@ -403,9 +471,16 @@ function Show-Html {
   $isWeb = $req.kind -eq 'web'
   $res = @{ found = $false }
   if (-not $isWeb) {
-    $raw = [IO.File]::ReadAllText($req.path)
-    $text = $raw -replace '(?is)<(script|style)\b.*?</\1>', ' ' -replace '(?s)<[^>]+>', ' '
-    $text = $text -replace '&nbsp;', ' ' -replace '&amp;', '&' -replace '&lt;', '<' -replace '&gt;', '>' -replace '&quot;', '"'
+    # The page's text as it reads: no comment, script, style sheet or head; a
+    # tag that sets text apart (a paragraph, a line break, a cell, a list
+    # item) is a blank, and one inside a sentence or a word (bold, a link) is
+    # nothing at all - as a blank it parted a word in two and put a space in
+    # front of a full stop. Then every entity, named or numbered, is read.
+    $raw = ReadText $req.path
+    $text = $raw -replace '(?s)<!--.*?-->', ' ' -replace '(?is)<(script|style|head|template)\b.*?</\1\s*>', ' '
+    $inline = 'a|abbr|b|bdi|bdo|cite|code|del|dfn|em|font|i|ins|kbd|mark|q|s|samp|small|span|strike|strong|sub|sup|tt|u|var|wbr'
+    $text = $text -replace "(?is)</?(?:$inline)(?:\s[^>]*)?>", '' -replace '(?s)<[^>]+>', ' '
+    $text = [Net.WebUtility]::HtmlDecode($text)
     $res.found = [regex]::IsMatch($text, (Pattern $req.quote))
   }
   if (-not $show) { return $res }
