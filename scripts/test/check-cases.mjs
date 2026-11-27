@@ -15,9 +15,13 @@ import { fileURLToPath } from 'node:url'
 
 const [folder, wordFile] = process.argv.slice(2)
 const show = join(dirname(dirname(fileURLToPath(import.meta.url))), 'show.js')
+// On a Mac, SYW_OSASCRIPT=1 runs the script the way the plugin does there
+// (JavaScript for Automation) rather than under Node: the same cases, read by
+// the Mac's own means
+const runner = process.env.SYW_OSASCRIPT === '1' ? ['/usr/bin/osascript', '-l', 'JavaScript', show] : [process.execPath, show]
 const ask = request =>
   JSON.parse(
-    execFileSync(process.execPath, [show], {
+    execFileSync(runner[0], runner.slice(1), {
       env: { ...process.env, SYW_REQUEST: JSON.stringify({ ...request, show: false }) },
       encoding: 'utf8',
     })
