@@ -52,38 +52,38 @@ jobs:
             sdef "/Applications/Microsoft $app.app" > "$RUNNER_TEMP/out/$app.sdef" || true
             wc -c "$RUNNER_TEMP/out/$app.sdef"
           done
-          cd "$RUNNER_TEMP/out"
-          echo '--- Word'
-          grep -n -i -E 'name="(get range information|create range|select|text object|content|start of content|end of content|posix full name|full name|close)"' Word.sdef | head -60 || true
-          grep -n -i 'active end page number' Word.sdef | head || true
-          echo '--- Excel'
-          grep -n -i -E 'name="(string value|formula|value|get address|merge cells|merge area|used range|activate object|select|posix full name|full name|close)"' Excel.sdef | head -60 || true
-          echo '--- PowerPoint'
-          grep -n -i -E 'name="(go to slide|document window|view|posix full name|full name|slide|select)"' PowerPoint.sdef | head -60 || true
       - name: Let the shell control them, and skip the first-run screens
         run: |
           db="$HOME/Library/Application Support/com.apple.TCC/TCC.db"
-          sqlite3 "$db" '.schema access' || true
-          for client in /bin/bash /bin/sh /usr/bin/osascript /usr/local/opt/runner/provisioner/provisioner; do
-            for target in com.microsoft.Word com.microsoft.Excel com.microsoft.Powerpoint; do
-              sqlite3 "$db" "INSERT OR REPLACE INTO access VALUES('kTCCServiceAppleEvents','$client',1,2,3,1,NULL,NULL,0,'$target',NULL,0,strftime('%s','now'),NULL,NULL,'UNUSED',0);" || true
+          agent="$(ps -axo comm | grep -m1 hosted-compute-agent || true)"
+          echo "agent: $agent"
+          for client in "$agent" /bin/bash /bin/sh /usr/bin/osascript; do
+            for target in com.microsoft.Word com.microsoft.Excel com.microsoft.Powerpoint com.apple.systemevents; do
+              sudo sqlite3 "$db" ".timeout 10000" "INSERT OR REPLACE INTO access VALUES('kTCCServiceAppleEvents','$client',1,2,3,1,NULL,NULL,0,'$target',NULL,0,strftime('%s','now'),NULL,NULL,'UNUSED',0);" || true
             done
           done
+          sudo sqlite3 "$db" ".timeout 10000" "SELECT service, client, auth_value, indirect_object_identifier FROM access WHERE service='kTCCServiceAppleEvents';" || true
           for id in com.microsoft.Word com.microsoft.Excel com.microsoft.Powerpoint; do
             defaults write "$id" kSubUIAppCompletedFirstRunSetup1507 -bool true
             defaults write "$id" SendAllTelemetryEnabled -bool false
           done
-          defaults write com.microsoft.office OfficeAutoSignIn -bool false || true
+          brew install cliclick || true
       - name: The demo set against the programs
         run: |
-          perl -e 'alarm shift; exec @ARGV' 900 sh scripts/test/check-mac.sh > "$RUNNER_TEMP/out/result.txt" 2>&1 || true
+          # Whoever asks «may this control Word?» is answered, and the screen
+          # is kept every half minute: what stood in the way is read off it
+          (n=0; while true; do
+             osascript -e 'tell application "System Events" to tell process "UserNotificationCenter" to click button "Allow" of window 1' >/dev/null 2>&1 || cliclick c:571,361 >/dev/null 2>&1 || true
+             n=$((n+1)); [ $((n % 6)) -eq 0 ] && screencapture -x "$RUNNER_TEMP/out/screen-$n.png"
+             sleep 5
+           done) &
+          perl -e 'alarm shift; exec @ARGV' 600 sh scripts/test/check-mac.sh > "$RUNNER_TEMP/out/result.txt" 2>&1 || true
           cat "$RUNNER_TEMP/out/result.txt"
           screencapture -x "$RUNNER_TEMP/out/after-lookup.png" || true
-      - name: One of each shown
-        run: |
-          perl -e 'alarm shift; exec @ARGV' 600 sh scripts/test/check-mac.sh show > "$RUNNER_TEMP/out/shown.txt" 2>&1 || true
+          perl -e 'alarm shift; exec @ARGV' 420 sh scripts/test/check-mac.sh show > "$RUNNER_TEMP/out/shown.txt" 2>&1 || true
           cat "$RUNNER_TEMP/out/shown.txt"
           screencapture -x "$RUNNER_TEMP/out/after-show.png" || true
+          kill %1 || true
       - uses: actions/upload-artifact@v4
         if: always()
         with:
