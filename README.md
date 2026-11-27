@@ -155,6 +155,12 @@ what each system lets a program be asked to do.
 | Code | Line and column, in VS Code | The same | Not shown |
 | HTML and web | Words marked by the browser | The same | Not shown |
 
+- **macOS is new in 0.4.0, and not yet tried with Office.** Reading the
+  files, text, HTML and the web are checked on a Mac. What asks Word, Excel
+  and PowerPoint (a Word page, an Excel cell, opening any of them at the
+  words) was written against their scripting dictionaries and has not run
+  against the programs themselves. If it fails for you,
+  [`docs/MAC-TEST.md`](docs/MAC-TEST.md) says what to send.
 - **macOS.** Word, Excel and PowerPoint are driven through Apple events, so
   the first citation of each kind asks whether Claude Code (or your terminal)
   may control that program. A Word or PowerPoint quote is looked up in the

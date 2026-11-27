@@ -1,14 +1,17 @@
-# Runs the Mac's look-up (scripts/show.js) on one of GitHub's Macs. A REPORT,
-# not a gate: it is started by hand, or by pushing to a branch named
-# mac-check/..., and never by an ordinary push. Read the log and the files it
-# keeps (CLAUDE.md § Commands).
+# Runs what can be run of the Mac's look-up (scripts/show.js) on one of
+# GitHub's Macs. Started by hand, or by pushing to a branch named
+# mac-check/..., and never by an ordinary push (CLAUDE.md § Platforms).
 #
-#   files    no Office on the machine: everything the script reads itself,
-#            by the Mac's own means (osascript, unzip, NSString)
-#   office   Word, Excel and PowerPoint installed unlicensed: their scripting
-#            dictionaries are printed (the names the script calls must be in
-#            them), and the look-up is tried against the programs. Best
-#            effort: an unlicensed Office may sit behind a sign-in window.
+#   files          no Office on the machine: everything the script reads
+#                  itself, by the Mac's own means (osascript, unzip, NSString),
+#                  and text, HTML and the web shown
+#   dictionaries   Word, Excel and PowerPoint installed, never started: every
+#                  name the script calls must be in their scripting
+#                  dictionaries
+#
+# What it cannot do is ask the programs anything: an unlicensed Office opens
+# on an offer to buy it, with no document behind it (tried 2026-11-27). That
+# part is docs/MAC-TEST.md, by a person.
 name: mac-check
 
 on:
@@ -34,66 +37,34 @@ jobs:
         run: |
           python -m pip install --quiet openpyxl python-pptx
           python scripts/test/make_hard.py "$RUNNER_TEMP/hard"
-          SYW_OSASCRIPT=1 node scripts/test/check-cases.mjs "$RUNNER_TEMP/hard" || true
-      - name: The demo set, looked up and shown (no Office here)
+          SYW_OSASCRIPT=1 node scripts/test/check-cases.mjs "$RUNNER_TEMP/hard"
+      - name: The demo set, looked up and shown (the Office cases fail here)
         run: sh scripts/test/check-mac.sh show || true
 
-  office:
+  dictionaries:
     runs-on: macos-latest
-    timeout-minutes: 45
+    timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v4
       - name: Install Word, Excel and PowerPoint
         run: brew install --cask microsoft-word microsoft-excel microsoft-powerpoint
-      - name: Their scripting dictionaries
+      - name: Every name the script calls is in them
         run: |
-          mkdir -p "$RUNNER_TEMP/out"
-          for app in Word Excel PowerPoint; do
-            sdef "/Applications/Microsoft $app.app" > "$RUNNER_TEMP/out/$app.sdef" || true
-            wc -c "$RUNNER_TEMP/out/$app.sdef"
-          done
-      - name: Let the shell control them, and skip the first-run screens
-        run: |
-          db="$HOME/Library/Application Support/com.apple.TCC/TCC.db"
-          agent="$(ps -axo comm | grep -m1 hosted-compute-agent || true)"
-          echo "agent: $agent"
-          for client in "$agent" /bin/bash /bin/sh /usr/bin/osascript; do
-            for target in com.microsoft.Word com.microsoft.Excel com.microsoft.Powerpoint com.apple.systemevents; do
-              sudo sqlite3 "$db" ".timeout 10000" "INSERT OR REPLACE INTO access VALUES('kTCCServiceAppleEvents','$client',1,2,3,1,NULL,NULL,0,'$target',NULL,0,strftime('%s','now'),NULL,NULL,'UNUSED',0);" || true
+          missing=0
+          has() {
+            app="$1"; shift
+            sdef "/Applications/Microsoft $app.app" > "$RUNNER_TEMP/$app.sdef"
+            for name in "$@"; do
+              if grep -q "name=\"$name\"" "$RUNNER_TEMP/$app.sdef"; then
+                echo "ok       $app: $name"
+              else
+                echo "MISSING  $app: $name"
+                missing=$((missing + 1))
+              fi
             done
-          done
-          sudo sqlite3 "$db" ".timeout 10000" "SELECT service, client, auth_value, indirect_object_identifier FROM access WHERE service='kTCCServiceAppleEvents';" || true
-          for id in com.microsoft.Word com.microsoft.Excel com.microsoft.Powerpoint; do
-            defaults write "$id" kSubUIAppCompletedFirstRunSetup1507 -bool true
-            defaults write "$id" SendAllTelemetryEnabled -bool false
-          done
-          # ... and let it press a button in another program's window
-          for client in "$agent" /bin/bash /bin/sh /usr/bin/osascript; do
-            sudo sqlite3 "/Library/Application Support/com.apple.TCC/TCC.db" ".timeout 10000" "INSERT OR REPLACE INTO access VALUES('kTCCServiceAccessibility','$client',1,2,4,1,NULL,NULL,0,'UNUSED',NULL,0,strftime('%s','now'),NULL,NULL,'UNUSED',0);" || true
-          done
-      - name: The demo set against the programs
-        run: |
-          # Whoever asks «may this control Word?» is answered, and the screen
-          # is kept every half minute: what stood in the way is read off it
-          (n=0; while true; do
-             osascript -e 'tell application "System Events" to tell process "UserNotificationCenter" to click button "Allow" of window 1' >/dev/null 2>&1 || true
-             # An unlicensed Office opens on an offer to buy it, in a window
-             # named after the program: closed, never answered
-             for app in Word Excel PowerPoint; do
-               osascript -e "tell application \"System Events\" to tell process \"Microsoft $app\" to click (first button whose subrole is \"AXCloseButton\") of (first window whose name is \"$app\")" >/dev/null 2>&1 || true
-             done
-             n=$((n+1)); [ $((n % 6)) -eq 0 ] && screencapture -x "$RUNNER_TEMP/out/screen-$n.png"
-             sleep 5
-           done) &
-          perl -e 'alarm shift; exec @ARGV' 500 sh scripts/test/check-mac.sh > "$RUNNER_TEMP/out/result.txt" 2>&1 || true
-          cat "$RUNNER_TEMP/out/result.txt"
-          screencapture -x "$RUNNER_TEMP/out/after-lookup.png" || true
-          perl -e 'alarm shift; exec @ARGV' 800 sh scripts/test/check-mac.sh show > "$RUNNER_TEMP/out/shown.txt" 2>&1 || true
-          cat "$RUNNER_TEMP/out/shown.txt"
-          screencapture -x "$RUNNER_TEMP/out/after-show.png" || true
-          kill %1 || true
-      - uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: mac-check
-          path: ${{ runner.temp }}/out
+          }
+          has Word 'create range' 'get range information' 'information type' 'active end page number' \
+            'text object' 'content' 'start of content' 'end of content' 'posix full name' 'full name'
+          has Excel 'string value' 'formula' 'value' 'get address' 'merge cells' 'merge area' \
+            'used range' 'activate object' 'full name'
+          has PowerPoint 'go to slide' 'number' 'document window' 'view' 'full name'
+          exit "$missing"

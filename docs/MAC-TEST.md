@@ -1,9 +1,10 @@
 # Testing Show your work on a Mac
 
-The Mac version was written on Windows and has never run on a Mac. What reads
-the files is checked (it is plain JavaScript and runs anywhere); what drives
-Word, Excel and PowerPoint is not. This is how to check it, in about fifteen
-minutes. Nothing is installed, and nothing leaves the machine.
+The Mac version was written on Windows. What reads the files, and showing
+text, HTML and web pages, is checked on a Mac; what drives Word, Excel and
+PowerPoint has never run against the programs (that takes a Mac with a
+licensed Office). This is how to check it, in about fifteen minutes. Nothing
+is installed, and nothing leaves the machine.
 
 You need a Mac with Word, Excel and PowerPoint. VS Code and
 [PDF Scholar](https://github.com/emilmsh/pdf-scholar) are optional.
@@ -11,7 +12,7 @@ You need a Mac with Word, Excel and PowerPoint. VS Code and
 ## 1. Get the files
 
 ```
-git clone -b mac-linux https://github.com/emilmsh/show-your-work.git
+git clone https://github.com/emilmsh/show-your-work.git
 cd show-your-work
 ```
 
@@ -52,11 +53,9 @@ Seven sources open, four seconds apart. For each, note what you saw:
 `error` or a `place` in the output is exactly what is needed: each says which
 call a Mac refused.
 
-## 5. In Claude Code (optional, once the above works)
+## 5. In Claude Code
 
-```
-claude --plugin-dir .
-```
-
-Then, in the `demo` folder, ask the question from the README and press the
-links in the answer.
+Install the plugin as the README says (version 0.4.0 or later). Then, in the
+`demo` folder, ask the question from the README and press the links in the
+answer. The first press for each program asks whether Claude Code (or your
+terminal) may control it: answer **OK**.

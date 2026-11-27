@@ -67,8 +67,17 @@ Use Claude Code 2.1.330 or later (`claude` on the PATH may be older).
 **Windows is the reference.** macOS is held to it kind for kind; Linux shows
 PDFs only. What each system shows, and where it differs, is the table in the
 README (§ Which systems): a difference that is not in that table is a bug.
-The macOS script was written on Windows (2026-11-26) and is **not released
-until it has run on a Mac** (`docs/MAC-TEST.md`); the branch is `mac-linux`.
+The macOS script was written on Windows (2026-11-26) and released in 0.4.0
+before it had run against Office on a Mac - Emil's call, 2026-11-27: the Mac
+is a path of its own and a release is how a tester gets it. What IS checked
+there, on one of GitHub's Macs (`.github/workflows/mac-check.yml`, started by
+hand or by pushing a branch named `mac-check/...`, never by an ordinary
+push): the hard cases through `osascript` (44 of 44), text, HTML and the web
+shown, and every name the script calls is in Office's scripting dictionaries.
+What is NOT: any call that reaches Word, Excel or PowerPoint. An unlicensed
+Office opens on an offer to buy it and no document behind it, so a runner
+cannot go further; that part needs a person with a Mac (`docs/MAC-TEST.md`).
+Keep the README's «not yet tried with Office» until one has run it.
 
 What a system decides lives in exactly three places:
 

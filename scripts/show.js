@@ -576,8 +576,16 @@ function opened(app, list, path) {
 // double-click opens it (which a sandboxed Office accepts without asking for
 // the folder) - out of sight when it is only to be checked
 function inProgram(name, list, path, show) {
-  var app = Application(name)
-  var wasRunning = app.running()
+  var app
+  var wasRunning
+
+  try {
+    app = Application(name)
+    wasRunning = app.running()
+  } catch (error) {
+    throw new Error(name + ' is not installed')
+  }
+
   var file = wasRunning ? opened(app, list(app), path) : null
   var wasOpen = file !== null
 
@@ -590,6 +598,8 @@ function inProgram(name, list, path, show) {
     }
 
     if (file === null) {
+      // Also what a program without a licence comes to: it starts on an
+      // offer to buy it, and opens nothing behind it
       throw new Error(name + ' did not open the file')
     }
   }
@@ -943,7 +953,11 @@ function showHtml(req, show) {
 // A window of a program that showed something on its own word (PDF Scholar,
 // through its own server): brought to the front the way the others are
 function showRaise(req) {
-  Application(req.process).activate()
+  try {
+    Application(req.process).activate()
+  } catch (error) {
+    throw new Error(req.process + ' is not installed')
+  }
 
   return { found: true, raised: 'foreground' }
 }
