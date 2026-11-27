@@ -1,6 +1,6 @@
 {
   "name": "show-your-work",
-  "version": "0.3.6",
+  "version": "0.4.0",
   "description": "Claude shows exactly where each claim comes from: a link in the answer opens the Word, Excel, PowerPoint, PDF, text, code or web source at the cited words. Windows and macOS; PDFs only on Linux.",
   "author": { "name": "Emil Mathias Strøm Halseth" },
   "homepage": "https://github.com/emilmsh/show-your-work",
