@@ -545,8 +545,10 @@ function samePath(theirs, mine) {
 function opened(app, list, path) {
   var all = []
 
+  // No list at all (null) is what a program answers while a window of its
+  // own stands in front of every document: a sign-in or licence screen
   try {
-    all = list()
+    all = list() || []
   } catch (error) {
     return null
   }
